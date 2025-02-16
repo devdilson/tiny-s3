@@ -18,17 +18,14 @@ import java.util.*;
 
 public class S3Handler {
   private final Map<String, Credentials> credentials;
-  private final String storagePath;
   private final S3Authenticator authenticator;
   private final S3FileOperations fileSystem;
 
   public S3Handler(
       Map<String, Credentials> credentials,
-      String storagePath,
       S3Authenticator authenticator,
       S3FileOperations fileSystem) {
     this.credentials = credentials;
-    this.storagePath = storagePath;
     this.authenticator = authenticator;
     this.fileSystem = fileSystem;
   }
@@ -174,7 +171,7 @@ public class S3Handler {
       return;
     }
 
-    if (!fileSystem.objectExists(bucketName, objectKey)) {
+    if (!fileSystem.objectExists(bucketName, objectKey) && !objectKey.isEmpty()) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }

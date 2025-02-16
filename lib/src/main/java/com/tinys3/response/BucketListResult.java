@@ -3,17 +3,11 @@ package com.tinys3.response;
 import static com.tinys3.S3Utils.LAST_MODIFIED_FORMATTER;
 import static com.tinys3.S3Utils.createXMLStreamWriter;
 
-import java.io.IOException;
 import java.io.StringWriter;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
@@ -26,9 +20,8 @@ public record BucketListResult(
     String nextContinuationToken,
     Set<String> commonPrefixes,
     List<BucketObject> objects,
-    Path bucketPath,
+    String bucketKey,
     boolean isV2) {
-  public record BucketObject(Path path, long size, FileTime lastModified) {}
 
   public String toXML() {
     StringWriter writer = new StringWriter();
@@ -96,7 +89,7 @@ public record BucketListResult(
         xml.writeStartElement("Contents");
 
         xml.writeStartElement("Key");
-        xml.writeCharacters(bucketPath.relativize(object.path()).toString());
+        xml.writeCharacters(bucketKey);
         xml.writeEndElement();
 
         xml.writeStartElement("Size");
@@ -135,7 +128,7 @@ public record BucketListResult(
     private String nextContinuationToken;
     private Set<String> commonPrefixes = new HashSet<>();
     private List<BucketObject> objects = new ArrayList<>();
-    private Path bucketPath;
+    private String bucketPath;
     private boolean isV2;
 
     public Builder bucketName(String bucketName) {
@@ -173,23 +166,12 @@ public record BucketListResult(
       return this;
     }
 
-    public Builder objects(List<Path> paths) {
-      this.objects =
-          paths.stream()
-              .map(
-                  path -> {
-                    try {
-                      return new BucketObject(
-                          path, Files.size(path), Files.getLastModifiedTime(path));
-                    } catch (IOException e) {
-                      throw new UncheckedIOException(e);
-                    }
-                  })
-              .collect(Collectors.toList());
+    public Builder objects(List<BucketObject> objects) {
+      this.objects = objects;
       return this;
     }
 
-    public Builder bucketPath(Path bucketPath) {
+    public Builder bucketPath(String bucketPath) {
       this.bucketPath = bucketPath;
       return this;
     }

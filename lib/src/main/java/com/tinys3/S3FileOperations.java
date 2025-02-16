@@ -53,5 +53,4 @@ public interface S3FileOperations {
 
   void copyObject(String sourceBucketName, String sourceKey, String destBucketName, String destKey);
 
-  Object relativize(Path path);
 }

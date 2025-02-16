@@ -3,20 +3,15 @@ package com.tinys3;
 import static com.tinys3.S3Utils.parseQueryString;
 
 import com.tinys3.http.S3HttpExchange;
-import com.tinys3.response.BucketListResult;
-import com.tinys3.response.CompleteMultipartUploadResult;
-import com.tinys3.response.InitiateMultipartUploadResult;
-import com.tinys3.response.ListAllBucketsResult;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import com.tinys3.response.*;
+import java.io.*;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class DefaultS3FileOperations implements S3FileOperations {
 
@@ -181,6 +176,19 @@ public class DefaultS3FileOperations implements S3FileOperations {
       }
     }
 
+    var objectsFinal =
+        objects.stream()
+            .map(
+                path -> {
+                  try {
+                    return new BucketObject(
+                        path, Files.size(path), Files.getLastModifiedTime(path));
+                  } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                  }
+                })
+            .collect(Collectors.toList());
+
     return new BucketListResult.Builder()
         .bucketName(bucketName)
         .prefix(prefix)
@@ -189,8 +197,8 @@ public class DefaultS3FileOperations implements S3FileOperations {
         .continuationToken(continuationToken)
         .nextContinuationToken(nextContinuationToken)
         .commonPrefixes(commonPrefixes)
-        .objects(objects)
-        .bucketPath(objectPath)
+        .objects(objectsFinal)
+        .bucketPath(bucketName)
         .isV2(isV2)
         .build();
   }
@@ -325,8 +333,4 @@ public class DefaultS3FileOperations implements S3FileOperations {
     }
   }
 
-  @Override
-  public Object relativize(Path path) {
-    return null;
-  }
 }
