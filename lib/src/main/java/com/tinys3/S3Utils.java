@@ -62,16 +62,15 @@ public class S3Utils {
   }
 
   public static String getCredentialScope(String timestamp, Credentials credentials) {
-    return String.format(
-        "%s/%s/s3/aws4_request", timestamp.substring(0, 8), credentials.getRegion());
+    return String.format("%s/%s/s3/aws4_request", timestamp.substring(0, 8), credentials.region());
   }
 
   public static String calculateSignature(
       String stringToSign, String timestamp, Credentials credentials)
       throws NoSuchAlgorithmException, InvalidKeyException {
-    byte[] kSecret = ("AWS4" + credentials.getSecretKey()).getBytes(StandardCharsets.UTF_8);
+    byte[] kSecret = ("AWS4" + credentials.secretKey()).getBytes(StandardCharsets.UTF_8);
     byte[] kDate = hmacSHA256(kSecret, timestamp.substring(0, 8));
-    byte[] kRegion = hmacSHA256(kDate, credentials.getRegion());
+    byte[] kRegion = hmacSHA256(kDate, credentials.region());
     byte[] kService = hmacSHA256(kRegion, "s3");
     byte[] kSigning = hmacSHA256(kService, "aws4_request");
     return bytesToHex(hmacSHA256(kSigning, stringToSign));

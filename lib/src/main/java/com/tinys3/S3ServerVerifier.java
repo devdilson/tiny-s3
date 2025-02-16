@@ -50,7 +50,7 @@ public class S3ServerVerifier {
     String credentialRegion = credParts[2];
     String credentialService = credParts[3];
 
-    if (!credentialRegion.equals(credentials.getRegion()) || !"s3".equals(credentialService)) {
+    if (!credentialRegion.equals(credentials.region()) || !"s3".equals(credentialService)) {
       return false;
     }
 
@@ -103,7 +103,7 @@ public class S3ServerVerifier {
     String credentialRegion = credParts[2];
     String credentialService = credParts[3];
 
-    if (!credentialRegion.equals(credentials.getRegion()) || !"s3".equals(credentialService)) {
+    if (!credentialRegion.equals(credentials.region()) || !"s3".equals(credentialService)) {
       return false;
     }
 
@@ -167,9 +167,9 @@ public class S3ServerVerifier {
   }
 
   private byte[] getSigningKey(String dateStamp) throws Exception {
-    byte[] kSecret = ("AWS4" + credentials.getSecretKey()).getBytes(StandardCharsets.UTF_8);
+    byte[] kSecret = ("AWS4" + credentials.secretKey()).getBytes(StandardCharsets.UTF_8);
     byte[] kDate = hmacSHA256(dateStamp, kSecret);
-    byte[] kRegion = hmacSHA256(credentials.getRegion(), kDate);
+    byte[] kRegion = hmacSHA256(credentials.region(), kDate);
     byte[] kService = hmacSHA256("s3", kRegion);
     return hmacSHA256("aws4_request", kService);
   }

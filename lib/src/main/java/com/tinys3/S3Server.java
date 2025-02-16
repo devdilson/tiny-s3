@@ -16,7 +16,7 @@ public class S3Server {
   public static void main(String[] args) throws IOException {
     int port = 8080;
     Credentials credential = new Credentials("12345", "12345", "us-east-1");
-    HttpServer server = getHttpServer(port, Map.of(credential.getAccessKey(), credential));
+    HttpServer server = getHttpServer(port, Map.of(credential.accessKey(), credential));
     server.start();
     System.out.println("S3 Server started on port " + port);
   }

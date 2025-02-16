@@ -141,7 +141,7 @@ public class S3Handler {
 
   private void handleListBuckets(S3HttpExchange exchange, Credentials credentials)
       throws IOException {
-    var result = fileSystem.getListAllBucketsResult(credentials.getAccessKey());
+    var result = fileSystem.getListAllBucketsResult(credentials.accessKey());
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
