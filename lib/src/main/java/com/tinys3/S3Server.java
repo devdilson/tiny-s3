@@ -9,6 +9,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class S3Server {
@@ -25,7 +26,9 @@ public class S3Server {
     String storagePath = "storage";
     try {
       Files.createDirectories(Paths.get(storagePath));
+      ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
       HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+      server.setExecutor(executor);
 
       var handler = new S3Handler(credentials, storagePath, new DefaultAuthenticator(credentials));
 
