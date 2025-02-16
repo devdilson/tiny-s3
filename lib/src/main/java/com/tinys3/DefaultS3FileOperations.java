@@ -116,13 +116,14 @@ public class DefaultS3FileOperations implements S3FileOperations {
   }
 
   @Override
-  public void createDirectory(Path bucketPath) throws IOException {
+  public void createDirectory(String bucketName) throws IOException {
+    Path bucketPath = getObjectPath(bucketName, "");
     Files.createDirectory(bucketPath);
   }
 
   @Override
-  public BucketListResult getBucketListResult(
-      S3HttpExchange exchange, String bucketName, Path bucketPath) throws IOException {
+  public BucketListResult getBucketListResult(S3HttpExchange exchange, String bucketName)
+      throws IOException {
     Map<String, String> queryParams = parseQueryString(exchange.getRequestURI().getQuery());
     boolean isV2 = "2".equals(queryParams.get("list-type"));
     String prefix = queryParams.getOrDefault("prefix", "");
@@ -130,12 +131,13 @@ public class DefaultS3FileOperations implements S3FileOperations {
     int maxKeys = Integer.parseInt(queryParams.getOrDefault("max-keys", "1000"));
     String continuationToken = queryParams.get(isV2 ? "continuation-token" : "marker");
 
+    Path objectPath = getObjectPath(bucketName, "");
     List<Path> allObjects =
-        Files.walk(bucketPath)
+        Files.walk(objectPath)
             .filter(Files::isRegularFile)
             .filter(
                 p -> {
-                  String key = bucketPath.relativize(p).toString();
+                  String key = objectPath.relativize(p).toString();
                   return key.startsWith(prefix);
                 })
             .sorted()
@@ -144,7 +146,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
     int startIndex = 0;
     if (continuationToken != null) {
       for (int i = 0; i < allObjects.size(); i++) {
-        if (bucketPath.relativize(allObjects.get(i)).toString().compareTo(continuationToken) > 0) {
+        if (objectPath.relativize(allObjects.get(i)).toString().compareTo(continuationToken) > 0) {
           startIndex = i;
           break;
         }
@@ -158,7 +160,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
     for (int i = startIndex; i < allObjects.size() && count < maxKeys; i++) {
       Path object = allObjects.get(i);
-      String key = bucketPath.relativize(object).toString();
+      String key = objectPath.relativize(object).toString();
 
       if (!delimiter.isEmpty()) {
         int delimiterIndex = key.indexOf(delimiter, prefix.length());
@@ -175,7 +177,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
       count++;
 
       if (count == maxKeys && i + 1 < allObjects.size()) {
-        nextContinuationToken = bucketPath.relativize(allObjects.get(i + 1)).toString();
+        nextContinuationToken = objectPath.relativize(allObjects.get(i + 1)).toString();
       }
     }
 
@@ -188,7 +190,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
         .nextContinuationToken(nextContinuationToken)
         .commonPrefixes(commonPrefixes)
         .objects(objects)
-        .bucketPath(bucketPath)
+        .bucketPath(objectPath)
         .isV2(isV2)
         .build();
   }
@@ -196,7 +198,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
   @Override
   public boolean objectExists(String bucketName, String key) {
     var objectPath = Paths.get(storagePath, bucketName, key);
-    return !Files.exists(objectPath);
+    return Files.exists(objectPath);
   }
 
   @Override
@@ -222,8 +224,9 @@ public class DefaultS3FileOperations implements S3FileOperations {
   }
 
   @Override
-  public boolean bucketHasFiles(Path bucketPath) throws IOException {
-    return Files.list(bucketPath).findFirst().isPresent();
+  public boolean bucketHasFiles(String bucketName) throws IOException {
+    Path path = getObjectPath(bucketName, "");
+    return Files.list(path).findFirst().isPresent();
   }
 
   @Override
@@ -320,5 +323,10 @@ public class DefaultS3FileOperations implements S3FileOperations {
               + destKey,
           e);
     }
+  }
+
+  @Override
+  public Object relativize(Path path) {
+    return null;
   }
 }

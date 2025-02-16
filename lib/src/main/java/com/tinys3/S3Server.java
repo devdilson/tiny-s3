@@ -30,8 +30,14 @@ public class S3Server {
       HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
       server.setExecutor(executor);
 
-      var handler = new S3Handler(credentials, storagePath, new DefaultAuthenticator(credentials));
-
+      var handler =
+          new S3Handler(
+              credentials,
+              storagePath,
+              new DefaultAuthenticator(credentials),
+              new DefaultS3FileOperations(storagePath));
+      S3Handler inMemoryHandler = createInMemoryHandler(credentials, storagePath);
+      System.out.println(inMemoryHandler);
       S3HttpServerAdapter adapter =
           () ->
               (e) -> {
@@ -44,5 +50,16 @@ public class S3Server {
     } catch (IOException e) {
       throw new RuntimeException("Failed to initialize storage", e);
     }
+  }
+
+  private static S3Handler createInMemoryHandler(
+      Map<String, Credentials> credentials, String storagePath) {
+    var inMemory =
+        new S3Handler(
+            credentials,
+            storagePath,
+            new DefaultAuthenticator(credentials),
+            new InMemoryS3FileOperations());
+    return inMemory;
   }
 }

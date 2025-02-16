@@ -27,7 +27,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
 
@@ -336,7 +335,12 @@ public class MinioIntegrationTest {
                           () ->
                               IntStream.range(0, requestsPerThread)
                                   .forEach(
-                                          performRequestTests(threadId, testData, successfulRequests, failedRequests, latch))))
+                                      performRequestTests(
+                                          threadId,
+                                          testData,
+                                          successfulRequests,
+                                          failedRequests,
+                                          latch))))
               .collect(Collectors.toList());
 
       boolean completed = latch.await(5, TimeUnit.MINUTES);
@@ -357,29 +361,27 @@ public class MinioIntegrationTest {
   }
 
   @NotNull
-  private IntConsumer performRequestTests(int threadId, byte[] testData, AtomicInteger successfulRequests, AtomicInteger failedRequests, CountDownLatch latch) {
+  private IntConsumer performRequestTests(
+      int threadId,
+      byte[] testData,
+      AtomicInteger successfulRequests,
+      AtomicInteger failedRequests,
+      CountDownLatch latch) {
     return requestId -> {
       String objectName =
-              String.format(
-                      "concurrent-test/thread-%d-object-%d.txt",
-                      threadId, requestId);
+          String.format("concurrent-test/thread-%d-object-%d.txt", threadId, requestId);
 
       try {
         minioPutObject(objectName, testData);
 
-        downloadAndVerifyData(
-                objectName,
-                testData,
-                successfulRequests,
-                failedRequests);
+        downloadAndVerifyData(objectName, testData, successfulRequests, failedRequests);
 
         cleanUpData(objectName);
 
       } catch (Exception e) {
         failedRequests.incrementAndGet();
         System.err.printf(
-                "Error in thread %d, request %d: %s%n",
-                threadId, requestId, e.getMessage());
+            "Error in thread %d, request %d: %s%n", threadId, requestId, e.getMessage());
       } finally {
         latch.countDown();
       }

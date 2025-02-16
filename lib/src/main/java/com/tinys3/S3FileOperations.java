@@ -28,9 +28,9 @@ public interface S3FileOperations {
 
   boolean bucketExists(String bucketName);
 
-  void createDirectory(Path bucketPath) throws IOException;
+  void createDirectory(String bucketName) throws IOException;
 
-  BucketListResult getBucketListResult(S3HttpExchange exchange, String bucketName, Path bucketPath)
+  BucketListResult getBucketListResult(S3HttpExchange exchange, String bucketName)
       throws IOException;
 
   boolean objectExists(String bucketName, String key);
@@ -39,7 +39,7 @@ public interface S3FileOperations {
 
   void handleDeleteObject(String bucketName, String key) throws IOException;
 
-  boolean bucketHasFiles(Path bucketPath) throws IOException;
+  boolean bucketHasFiles(String bucketName) throws IOException;
 
   void getObject(S3HttpExchange exchange, String bucketName, String key) throws IOException;
 
@@ -52,4 +52,6 @@ public interface S3FileOperations {
   Path getObjectPath(String bucketName, String key);
 
   void copyObject(String sourceBucketName, String sourceKey, String destBucketName, String destKey);
+
+  Object relativize(Path path);
 }

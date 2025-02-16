@@ -3,7 +3,6 @@ package com.tinys3.response;
 import static com.tinys3.S3Utils.*;
 
 import com.tinys3.S3FileOperations;
-
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.file.attribute.FileTime;
@@ -11,8 +10,7 @@ import java.util.List;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
-public record CopyObjectResult(
-    String bucketName, String bucketKey, S3FileOperations s3Operations) {
+public record CopyObjectResult(String bucketName, String bucketKey, S3FileOperations s3Operations) {
 
   public String toXML() {
     StringWriter writer = new StringWriter();

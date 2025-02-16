@@ -9,8 +9,6 @@ import com.tinys3.http.S3HttpExchange;
 import com.tinys3.http.S3HttpHeaders;
 import com.tinys3.response.CopyObjectResult;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -25,11 +23,14 @@ public class S3Handler {
   private final S3FileOperations fileSystem;
 
   public S3Handler(
-      Map<String, Credentials> credentials, String storagePath, S3Authenticator authenticator) {
+      Map<String, Credentials> credentials,
+      String storagePath,
+      S3Authenticator authenticator,
+      S3FileOperations fileSystem) {
     this.credentials = credentials;
     this.storagePath = storagePath;
     this.authenticator = authenticator;
-    this.fileSystem = new DefaultS3FileOperations(storagePath);
+    this.fileSystem = fileSystem;
   }
 
   public void handle(S3HttpExchange exchange) throws IOException {
@@ -173,7 +174,7 @@ public class S3Handler {
       return;
     }
 
-    if (fileSystem.objectExists(bucketName, objectKey)) {
+    if (!fileSystem.objectExists(bucketName, objectKey)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
@@ -196,38 +197,35 @@ public class S3Handler {
   }
 
   private void handleListObjects(S3HttpExchange exchange, String bucketName) throws IOException {
-    Path bucketPath = Paths.get(storagePath, bucketName);
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
     }
 
-    var result = fileSystem.getBucketListResult(exchange, bucketName, bucketPath);
+    var result = fileSystem.getBucketListResult(exchange, bucketName);
 
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
   private void handleCreateBucket(S3HttpExchange exchange, String bucketName) throws IOException {
-    Path bucketPath = Paths.get(storagePath, bucketName);
 
     if (fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 409, "BucketAlreadyExists");
       return;
     }
 
-    fileSystem.createDirectory(bucketPath);
+    fileSystem.createDirectory(bucketName);
     sendResponse(exchange, 200, "", "application/xml");
   }
 
   private void handleDeleteBucket(S3HttpExchange exchange, String bucketName) throws IOException {
-    Path bucketPath = Paths.get(storagePath, bucketName);
 
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
     }
 
-    if (fileSystem.bucketHasFiles(bucketPath)) {
+    if (fileSystem.bucketHasFiles(bucketName)) {
       sendError(exchange, 409, "BucketNotEmpty");
       return;
     }
@@ -282,7 +280,7 @@ public class S3Handler {
     String sourceBucketName = sourceParts[0];
     String sourceKey = sourceParts[1];
 
-    if (fileSystem.objectExists(sourceBucketName, sourceKey)) {
+    if (!fileSystem.objectExists(sourceBucketName, sourceKey)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
@@ -300,7 +298,7 @@ public class S3Handler {
 
   private void handleGetObject(S3HttpExchange exchange, String bucketName, String key)
       throws IOException {
-    if (fileSystem.objectExists(bucketName, key)) {
+    if (!fileSystem.objectExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
@@ -322,7 +320,7 @@ public class S3Handler {
 
   private void handleDeleteObject(S3HttpExchange exchange, String bucketName, String key)
       throws IOException {
-    if (fileSystem.objectExists(bucketName, key)) {
+    if (!fileSystem.objectExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
