@@ -18,7 +18,7 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class DefaultS3FileOperations {
+public class DefaultS3FileOperations implements S3FileOperations {
 
   private final String storagePath;
 
@@ -28,6 +28,7 @@ public class DefaultS3FileOperations {
     this.storagePath = storagePath;
   }
 
+  @Override
   public InitiateMultipartUploadResult getInitiateMultipartUploadResult(
       String bucketName, String key) {
     String uploadId = UUID.randomUUID().toString();
@@ -35,16 +36,19 @@ public class DefaultS3FileOperations {
     return new InitiateMultipartUploadResult(bucketName, key, uploadId);
   }
 
+  @Override
   public ListAllBucketsResult getListAllBucketsResult(String accessKey) throws IOException {
     Path currentPath = Paths.get(storagePath);
     List<Path> buckets = Files.list(currentPath).toList();
     return ListAllBucketsResult.fromPaths(buckets, accessKey);
   }
 
+  @Override
   public boolean containsKey(String key) {
     return multipartUploads.containsKey(key);
   }
 
+  @Override
   public String handleUploadPart(String uploadId, Map<String, String> queryParams, byte[] payload)
       throws IOException {
     int partNumber = Integer.parseInt(queryParams.get("partNumber"));
@@ -66,6 +70,7 @@ public class DefaultS3FileOperations {
     return eTag;
   }
 
+  @Override
   public CompleteMultipartUploadResult getCompleteMultipartUploadResult(
       String bucketName, String key, String uploadId) throws IOException {
     Path bucketPath = Paths.get(storagePath, bucketName);
@@ -94,6 +99,7 @@ public class DefaultS3FileOperations {
         eTags);
   }
 
+  @Override
   public void handleAbortMultipartUpload(String uploadId) throws IOException {
     List<PartInfo> parts = multipartUploads.remove(uploadId);
     if (parts != null) {
@@ -103,15 +109,18 @@ public class DefaultS3FileOperations {
     }
   }
 
+  @Override
   public boolean bucketExists(String bucketName) {
     Path bucketPath = Paths.get(storagePath, bucketName);
     return Files.exists(bucketPath);
   }
 
+  @Override
   public void createDirectory(Path bucketPath) throws IOException {
     Files.createDirectory(bucketPath);
   }
 
+  @Override
   public BucketListResult getBucketListResult(
       S3HttpExchange exchange, String bucketName, Path bucketPath) throws IOException {
     Map<String, String> queryParams = parseQueryString(exchange.getRequestURI().getQuery());
@@ -184,11 +193,13 @@ public class DefaultS3FileOperations {
         .build();
   }
 
+  @Override
   public boolean objectExists(String bucketName, String key) {
     var objectPath = Paths.get(storagePath, bucketName, key);
     return !Files.exists(objectPath);
   }
 
+  @Override
   public String handlePutObject(String bucketName, String key, byte[] payload) throws IOException {
     Path objectPath = Paths.get(storagePath, bucketName, key);
     Files.createDirectories(objectPath.getParent());
@@ -204,15 +215,18 @@ public class DefaultS3FileOperations {
     return calculateETag(bucketName, key, false, List.of());
   }
 
+  @Override
   public void handleDeleteObject(String bucketName, String key) throws IOException {
     var objectPath = Paths.get(storagePath, bucketName, key);
     Files.delete(objectPath);
   }
 
+  @Override
   public boolean bucketHasFiles(Path bucketPath) throws IOException {
     return Files.list(bucketPath).findFirst().isPresent();
   }
 
+  @Override
   public void getObject(S3HttpExchange exchange, String bucketName, String key) throws IOException {
     var objectPath = getObjectPath(bucketName, key);
     try (InputStream is = Files.newInputStream(objectPath)) {
@@ -229,16 +243,19 @@ public class DefaultS3FileOperations {
     }
   }
 
+  @Override
   public long getSize(String bucketName, String key) throws IOException {
     Path bucketPath = getObjectPath(bucketName, key);
     return Files.size(bucketPath);
   }
 
+  @Override
   public FileTime getLastModifiedTime(String bucketName, String key) throws IOException {
     var objectPath = getObjectPath(bucketName, key);
     return Files.getLastModifiedTime(objectPath);
   }
 
+  @Override
   public String calculateETag(
       String bucketName, String key, boolean isMultipart, List<String> partETags) {
     try {
@@ -263,10 +280,12 @@ public class DefaultS3FileOperations {
     }
   }
 
-  private Path getObjectPath(String bucketName, String key) {
+  @Override
+  public Path getObjectPath(String bucketName, String key) {
     return Paths.get(storagePath, bucketName, key);
   }
 
+  @Override
   public void copyObject(
       String sourceBucketName, String sourceKey, String destBucketName, String destKey) {
     try {

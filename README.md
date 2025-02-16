@@ -1,6 +1,6 @@
 # TinyS3
 
-A lightweight S3-compatible server implementation in Java.
+A lightweight no-dependencies S3-compatible server implementation in Java.
 
 ## Features
 
