@@ -3,11 +3,10 @@ package com.tinys3;
 import static com.tinys3.CanonicalRequest.createCanonicalRequest;
 import static com.tinys3.S3Utils.*;
 
-import com.sun.net.httpserver.Headers;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
 import com.tinys3.auth.Credentials;
 import com.tinys3.auth.S3Authenticator;
+import com.tinys3.http.S3HttpExchange;
+import com.tinys3.http.S3HttpHeaders;
 import com.tinys3.response.CopyObjectResult;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -19,7 +18,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-public class S3Handler implements HttpHandler {
+public class S3Handler {
   private final Map<String, Credentials> credentials;
   private final String storagePath;
   private final S3Authenticator authenticator;
@@ -33,8 +32,7 @@ public class S3Handler implements HttpHandler {
     this.fileSystem = new DefaultS3FileOperations(storagePath);
   }
 
-  @Override
-  public void handle(HttpExchange exchange) throws IOException {
+  public void handle(S3HttpExchange exchange) throws IOException {
     try {
       byte[] payload = null;
       if (exchange.getRequestBody() != null) {
@@ -83,7 +81,7 @@ public class S3Handler implements HttpHandler {
   }
 
   private void handleMultipartUpload(
-      HttpExchange exchange, String bucketName, String key, String method) throws IOException {
+      S3HttpExchange exchange, String bucketName, String key, String method) throws IOException {
     if (method.equals("POST")) {
       var response = fileSystem.getInitiateMultipartUploadResult(bucketName, key);
       sendResponse(exchange, 200, response.toXML(), "application/xml");
@@ -91,7 +89,7 @@ public class S3Handler implements HttpHandler {
   }
 
   private void handleMultipartOperation(
-      HttpExchange exchange,
+      S3HttpExchange exchange,
       String bucketName,
       String key,
       String method,
@@ -114,17 +112,17 @@ public class S3Handler implements HttpHandler {
   }
 
   private void handleUploadPart(
-      HttpExchange exchange, String uploadId, Map<String, String> queryParams, byte[] payload)
+      S3HttpExchange exchange, String uploadId, Map<String, String> queryParams, byte[] payload)
       throws IOException {
     String eTag = fileSystem.handleUploadPart(uploadId, queryParams, payload);
 
-    exchange.getResponseHeaders().set("ETag", "\"" + eTag + "\"");
+    exchange.getResponseHeaders().addHeader("ETag", "\"" + eTag + "\"");
     exchange.sendResponseHeaders(200, -1);
     exchange.getResponseBody().close();
   }
 
   private void handleCompleteMultipartUpload(
-      HttpExchange exchange, String bucketName, String key, String uploadId) throws IOException {
+      S3HttpExchange exchange, String bucketName, String key, String uploadId) throws IOException {
 
     try {
       var result = fileSystem.getCompleteMultipartUploadResult(bucketName, key, uploadId);
@@ -134,20 +132,20 @@ public class S3Handler implements HttpHandler {
     }
   }
 
-  private void handleAbortMultipartUpload(HttpExchange exchange, String uploadId)
+  private void handleAbortMultipartUpload(S3HttpExchange exchange, String uploadId)
       throws IOException {
     fileSystem.handleAbortMultipartUpload(uploadId);
     exchange.sendResponseHeaders(204, -1);
     exchange.getResponseBody().close();
   }
 
-  private void handleListBuckets(HttpExchange exchange, Credentials credentials)
+  private void handleListBuckets(S3HttpExchange exchange, Credentials credentials)
       throws IOException {
     var result = fileSystem.getListAllBucketsResult(credentials.getAccessKey());
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
-  private void handleBucketOperation(HttpExchange exchange, String bucketName, String method)
+  private void handleBucketOperation(S3HttpExchange exchange, String bucketName, String method)
       throws IOException {
     switch (method) {
       case "HEAD":
@@ -168,7 +166,7 @@ public class S3Handler implements HttpHandler {
   }
 
   private void handleHeadObject(
-      HttpExchange exchange, String bucketName, String objectKey, byte[] payload)
+      S3HttpExchange exchange, String bucketName, String objectKey, byte[] payload)
       throws IOException {
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
@@ -180,9 +178,9 @@ public class S3Handler implements HttpHandler {
       return;
     }
 
-    Headers responseHeaders = exchange.getResponseHeaders();
-    responseHeaders.set("Content-Type", "application/octet-stream");
-    responseHeaders.set(
+    S3HttpHeaders responseHeaders = exchange.getResponseHeaders();
+    responseHeaders.addHeader("Content-Type", "application/octet-stream");
+    responseHeaders.addHeader(
         "Content-Length", String.valueOf(fileSystem.getSize(bucketName, objectKey)));
     var lastModified = fileSystem.getLastModifiedTime(bucketName, objectKey);
     String lastModifiedStr =
@@ -190,14 +188,14 @@ public class S3Handler implements HttpHandler {
             .withZone(ZoneOffset.UTC)
             .withLocale(Locale.US)
             .format(lastModified.toInstant());
-    responseHeaders.set("Last-Modified", lastModifiedStr);
-    responseHeaders.set(
+    responseHeaders.addHeader("Last-Modified", lastModifiedStr);
+    responseHeaders.addHeader(
         "ETag", "\"" + fileSystem.calculateETag(bucketName, objectKey, false, List.of()) + "\"");
 
     exchange.sendResponseHeaders(200, -1);
   }
 
-  private void handleListObjects(HttpExchange exchange, String bucketName) throws IOException {
+  private void handleListObjects(S3HttpExchange exchange, String bucketName) throws IOException {
     Path bucketPath = Paths.get(storagePath, bucketName);
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
@@ -209,7 +207,7 @@ public class S3Handler implements HttpHandler {
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
-  private void handleCreateBucket(HttpExchange exchange, String bucketName) throws IOException {
+  private void handleCreateBucket(S3HttpExchange exchange, String bucketName) throws IOException {
     Path bucketPath = Paths.get(storagePath, bucketName);
 
     if (fileSystem.bucketExists(bucketName)) {
@@ -221,7 +219,7 @@ public class S3Handler implements HttpHandler {
     sendResponse(exchange, 200, "", "application/xml");
   }
 
-  private void handleDeleteBucket(HttpExchange exchange, String bucketName) throws IOException {
+  private void handleDeleteBucket(S3HttpExchange exchange, String bucketName) throws IOException {
     Path bucketPath = Paths.get(storagePath, bucketName);
 
     if (!fileSystem.bucketExists(bucketName)) {
@@ -239,7 +237,7 @@ public class S3Handler implements HttpHandler {
   }
 
   private void handleObjectOperation(
-      HttpExchange exchange, String bucketName, String key, String method, byte[] payload)
+      S3HttpExchange exchange, String bucketName, String key, String method, byte[] payload)
       throws IOException {
 
     switch (method) {
@@ -250,7 +248,7 @@ public class S3Handler implements HttpHandler {
         handleHeadObject(exchange, bucketName, key, payload);
         break;
       case "PUT":
-        if (exchange.getRequestHeaders().containsKey("x-amz-copy-source")) {
+        if (exchange.getRequestHeaders().containsHeader("x-amz-copy-source")) {
           handleCopyObject(exchange, bucketName, key);
         } else {
           handlePutObject(exchange, bucketName, key, payload);
@@ -264,7 +262,7 @@ public class S3Handler implements HttpHandler {
     }
   }
 
-  private void handleCopyObject(HttpExchange exchange, String destBucketName, String destKey)
+  private void handleCopyObject(S3HttpExchange exchange, String destBucketName, String destKey)
       throws IOException {
     String copySource = exchange.getRequestHeaders().getFirst("x-amz-copy-source");
     if (copySource == null) {
@@ -300,7 +298,7 @@ public class S3Handler implements HttpHandler {
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
-  private void handleGetObject(HttpExchange exchange, String bucketName, String key)
+  private void handleGetObject(S3HttpExchange exchange, String bucketName, String key)
       throws IOException {
     if (fileSystem.objectExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
@@ -310,19 +308,19 @@ public class S3Handler implements HttpHandler {
     fileSystem.getObject(exchange, bucketName, key);
   }
 
-  private void handlePutObject(HttpExchange exchange, String bucketName, String key, byte[] payload)
-      throws IOException {
+  private void handlePutObject(
+      S3HttpExchange exchange, String bucketName, String key, byte[] payload) throws IOException {
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
     }
 
     String eTag = fileSystem.handlePutObject(bucketName, key, payload);
-    exchange.getResponseHeaders().set("ETag", eTag);
+    exchange.getResponseHeaders().addHeader("ETag", eTag);
     sendResponse(exchange, 200, "", "application/xml");
   }
 
-  private void handleDeleteObject(HttpExchange exchange, String bucketName, String key)
+  private void handleDeleteObject(S3HttpExchange exchange, String bucketName, String key)
       throws IOException {
     if (fileSystem.objectExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
@@ -333,7 +331,7 @@ public class S3Handler implements HttpHandler {
     sendResponse(exchange, 204, "", "application/xml");
   }
 
-  private void handlePreSignedUrlGeneration(HttpExchange exchange) throws IOException {
+  private void handlePreSignedUrlGeneration(S3HttpExchange exchange) throws IOException {
     try {
       Map<String, String> params = parseRequestParameters(exchange);
       String method = params.get("method");
@@ -350,7 +348,7 @@ public class S3Handler implements HttpHandler {
   }
 
   private String generatePreSignedUrl(
-      String method, String path, String accessKey, long expiration, Headers requestHeaders)
+      String method, String path, String accessKey, long expiration, S3HttpHeaders requestHeaders)
       throws NoSuchAlgorithmException, InvalidKeyException {
     String timestamp =
         DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")

@@ -3,7 +3,7 @@ package com.tinys3;
 import static com.tinys3.S3ServerVerifier.SIGNED_HEADERS;
 import static com.tinys3.S3Utils.*;
 
-import com.sun.net.httpserver.Headers;
+import com.tinys3.http.S3HttpHeaders;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 public class CanonicalRequest {
 
   public static String createCanonicalRequest(
-      String method, String path, Map<String, String> queryParams, Headers headers) {
+      String method, String path, Map<String, String> queryParams, S3HttpHeaders headers) {
     StringBuilder canonical = new StringBuilder();
 
     canonical.append(method).append('\n');

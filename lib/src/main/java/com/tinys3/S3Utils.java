@@ -1,7 +1,7 @@
 package com.tinys3;
 
-import com.sun.net.httpserver.HttpExchange;
 import com.tinys3.auth.Credentials;
+import com.tinys3.http.S3HttpExchange;
 import java.io.*;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -106,9 +106,9 @@ public class S3Utils {
   }
 
   public static void sendResponse(
-      HttpExchange exchange, int code, String response, String contentType) throws IOException {
+      S3HttpExchange exchange, int code, String response, String contentType) throws IOException {
     byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
-    exchange.getResponseHeaders().set("Content-Type", contentType);
+    exchange.getResponseHeaders().addHeader("Content-Type", contentType);
     if ("HEAD".equals(exchange.getRequestMethod())) {
       // For HEAD requests, we send the content length but no body
       exchange.sendResponseHeaders(code, -1);
@@ -122,7 +122,7 @@ public class S3Utils {
     }
   }
 
-  public static void sendError(HttpExchange exchange, int code, String errorCode)
+  public static void sendError(S3HttpExchange exchange, int code, String errorCode)
       throws IOException {
     String response = createErrorResponse(errorCode);
     sendResponse(exchange, code, response, "application/xml");
@@ -154,7 +154,7 @@ public class S3Utils {
     return errorMessages.getOrDefault(errorCode, "An error occurred");
   }
 
-  public static Map<String, String> parseRequestParameters(HttpExchange exchange)
+  public static Map<String, String> parseRequestParameters(S3HttpExchange exchange)
       throws IOException {
     Map<String, String> params = new HashMap<>();
     try (BufferedReader reader =
@@ -237,7 +237,7 @@ public class S3Utils {
     }
   }
 
-  public static byte[] copyPayload(HttpExchange exchange) throws IOException {
+  public static byte[] copyPayload(S3HttpExchange exchange) throws IOException {
     byte[] payload;
     InputStream inputStream = exchange.getRequestBody();
     ByteArrayOutputStream bos = new ByteArrayOutputStream();

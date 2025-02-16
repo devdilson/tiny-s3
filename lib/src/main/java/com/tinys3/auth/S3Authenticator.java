@@ -1,9 +1,9 @@
 package com.tinys3.auth;
 
-import com.sun.net.httpserver.HttpExchange;
+import com.tinys3.http.S3HttpExchange;
 
 public interface S3Authenticator {
-  boolean authenticateRequest(HttpExchange exchange, byte[] payload);
+  boolean authenticateRequest(S3HttpExchange exchange, byte[] payload);
 
-  Credentials getCredentials(HttpExchange exchange);
+  Credentials getCredentials(S3HttpExchange exchange);
 }

@@ -2,7 +2,7 @@ package com.tinys3;
 
 import static com.tinys3.S3Utils.parseQueryString;
 
-import com.sun.net.httpserver.HttpExchange;
+import com.tinys3.http.S3HttpExchange;
 import com.tinys3.response.BucketListResult;
 import com.tinys3.response.CompleteMultipartUploadResult;
 import com.tinys3.response.InitiateMultipartUploadResult;
@@ -113,7 +113,7 @@ public class DefaultS3FileOperations {
   }
 
   public BucketListResult getBucketListResult(
-      HttpExchange exchange, String bucketName, Path bucketPath) throws IOException {
+      S3HttpExchange exchange, String bucketName, Path bucketPath) throws IOException {
     Map<String, String> queryParams = parseQueryString(exchange.getRequestURI().getQuery());
     boolean isV2 = "2".equals(queryParams.get("list-type"));
     String prefix = queryParams.getOrDefault("prefix", "");
@@ -213,10 +213,10 @@ public class DefaultS3FileOperations {
     return Files.list(bucketPath).findFirst().isPresent();
   }
 
-  public void getObject(HttpExchange exchange, String bucketName, String key) throws IOException {
+  public void getObject(S3HttpExchange exchange, String bucketName, String key) throws IOException {
     var objectPath = getObjectPath(bucketName, key);
     try (InputStream is = Files.newInputStream(objectPath)) {
-      exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+      exchange.getResponseHeaders().addHeader("Content-Type", "application/octet-stream");
       exchange.sendResponseHeaders(200, Files.size(objectPath));
 
       try (OutputStream os = exchange.getResponseBody()) {

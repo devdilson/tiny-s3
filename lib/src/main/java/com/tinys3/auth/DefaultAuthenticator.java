@@ -2,9 +2,9 @@ package com.tinys3.auth;
 
 import static com.tinys3.S3Utils.parseQueryString;
 
-import com.sun.net.httpserver.Headers;
-import com.sun.net.httpserver.HttpExchange;
 import com.tinys3.S3ServerVerifier;
+import com.tinys3.http.S3HttpExchange;
+import com.tinys3.http.S3HttpHeaders;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +24,7 @@ public class DefaultAuthenticator implements S3Authenticator {
   }
 
   @Override
-  public boolean authenticateRequest(HttpExchange exchange, byte[] payload) {
+  public boolean authenticateRequest(S3HttpExchange exchange, byte[] payload) {
     try {
       Optional<String> accessKey = extractAccessKey(exchange);
       if (accessKey.isEmpty()) {
@@ -44,18 +44,18 @@ public class DefaultAuthenticator implements S3Authenticator {
   }
 
   @Override
-  public Credentials getCredentials(HttpExchange exchange) {
+  public Credentials getCredentials(S3HttpExchange exchange) {
     try {
       Optional<String> accessKey = extractAccessKey(exchange);
-      return accessKey.map(key -> credentials.get(key)).orElse(null);
+      return accessKey.map(credentials::get).orElse(null);
     } catch (Exception e) {
       e.printStackTrace();
       return null;
     }
   }
 
-  private Optional<String> extractAccessKey(HttpExchange exchange) {
-    Headers headers = exchange.getRequestHeaders();
+  private Optional<String> extractAccessKey(S3HttpExchange exchange) {
+    S3HttpHeaders headers = exchange.getRequestHeaders();
     Map<String, String> queryParams = parseQueryString(exchange.getRequestURI().getQuery());
 
     String authHeader = headers.getFirst("Authorization");
@@ -84,8 +84,8 @@ public class DefaultAuthenticator implements S3Authenticator {
   }
 
   private boolean verifySignature(
-      HttpExchange exchange, byte[] payload, Credentials userCredentials) throws Exception {
-    Headers headers = exchange.getRequestHeaders();
+      S3HttpExchange exchange, byte[] payload, Credentials userCredentials) throws Exception {
+    S3HttpHeaders headers = exchange.getRequestHeaders();
     Map<String, String> headerMap = convertHeaders(headers);
 
     String requestURL = constructRequestURL(exchange);
@@ -97,7 +97,7 @@ public class DefaultAuthenticator implements S3Authenticator {
         requestURL, exchange.getRequestMethod(), headerMap, dateHeader, authHeader, payload);
   }
 
-  private Map<String, String> convertHeaders(Headers headers) {
+  private Map<String, String> convertHeaders(S3HttpHeaders headers) {
     Map<String, String> headerMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
     for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
       if (!entry.getValue().isEmpty()) {
@@ -107,7 +107,7 @@ public class DefaultAuthenticator implements S3Authenticator {
     return headerMap;
   }
 
-  private String constructRequestURL(HttpExchange exchange) {
+  private String constructRequestURL(S3HttpExchange exchange) {
     URI uri = exchange.getRequestURI();
     String host = exchange.getRequestHeaders().getFirst("Host");
 

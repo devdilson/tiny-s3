@@ -3,6 +3,7 @@ package com.tinys3;
 import com.sun.net.httpserver.HttpServer;
 import com.tinys3.auth.Credentials;
 import com.tinys3.auth.DefaultAuthenticator;
+import com.tinys3.http.HttpExchangeAdapter;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
@@ -25,8 +26,16 @@ public class S3Server {
     try {
       Files.createDirectories(Paths.get(storagePath));
       HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-      server.createContext(
-          "/", new S3Handler(credentials, storagePath, new DefaultAuthenticator(credentials)));
+
+      var handler = new S3Handler(credentials, storagePath, new DefaultAuthenticator(credentials));
+
+      S3HttpServerAdapter adapter =
+          () ->
+              (e) -> {
+                handler.handle(new HttpExchangeAdapter(e));
+              };
+
+      server.createContext("/", adapter.getHandler());
       server.setExecutor(Executors.newFixedThreadPool(24));
       return server;
     } catch (IOException e) {
