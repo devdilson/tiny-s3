@@ -1,27 +1,20 @@
 package com.tinys3.response;
 
+import static com.tinys3.S3Utils.LAST_MODIFIED_FORMATTER;
 import static com.tinys3.S3Utils.createXMLStreamWriter;
 
-import java.io.IOException;
+import com.tinys3.io.FileOperations;
 import java.io.StringWriter;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
 public record ListAllBucketsResult(List<BucketInfo> buckets) {
-  public record BucketInfo(String name, FileTime creationTime, String accessKey) {
-    public static BucketInfo fromPath(Path bucket, String accessKey) throws IOException {
-      return new BucketInfo(
-          bucket.getFileName().toString(),
-          (FileTime) Files.getAttribute(bucket, "creationTime"),
-          accessKey);
-    }
-  }
+
+  public record BucketInfo(String name, FileTime creationTime, String accessKey) {}
 
   public String toXML() {
     StringWriter writer = new StringWriter();
@@ -45,7 +38,7 @@ public record ListAllBucketsResult(List<BucketInfo> buckets) {
         xml.writeCharacters(bucket.name());
         xml.writeEndElement();
         xml.writeStartElement("CreationDate");
-        xml.writeCharacters(bucket.creationTime().toString());
+        xml.writeCharacters(LAST_MODIFIED_FORMATTER.format(bucket.creationTime().toInstant()));
         xml.writeEndElement();
         xml.writeEndElement();
       }
@@ -66,17 +59,14 @@ public record ListAllBucketsResult(List<BucketInfo> buckets) {
     }
   }
 
-  public static ListAllBucketsResult fromPaths(List<Path> buckets, String accessKey) {
+  public static ListAllBucketsResult fromBuckets(
+      FileOperations.FileEntry[] buckets, String accessKey) {
     List<BucketInfo> bucketInfos =
-        buckets.stream()
+        Arrays.stream(buckets).toList().stream()
             .map(
-                bucket -> {
-                  try {
-                    return BucketInfo.fromPath(bucket, accessKey);
-                  } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                  }
-                })
+                bucket ->
+                    new BucketInfo(
+                        bucket.getPath(), FileTime.fromMillis(bucket.getLastModified()), accessKey))
             .collect(Collectors.toList());
     return new ListAllBucketsResult(bucketInfos);
   }

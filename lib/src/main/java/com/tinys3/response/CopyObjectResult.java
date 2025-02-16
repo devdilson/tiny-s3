@@ -3,7 +3,7 @@ package com.tinys3.response;
 import static com.tinys3.S3Utils.*;
 
 import com.tinys3.S3FileOperations;
-import java.io.IOException;
+import com.tinys3.io.StorageException;
 import java.io.StringWriter;
 import java.nio.file.attribute.FileTime;
 import java.util.List;
@@ -34,7 +34,9 @@ public record CopyObjectResult(String bucketName, String bucketKey, S3FileOperat
       xml.writeEndDocument();
 
       return writer.toString();
-    } catch (XMLStreamException | IOException e) {
+    } catch (XMLStreamException e) {
+      throw new RuntimeException(e);
+    } catch (StorageException e) {
       throw new RuntimeException(e);
     } finally {
       try {

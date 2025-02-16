@@ -3,10 +3,11 @@ package com.tinys3;
 import static com.tinys3.S3Utils.parseQueryString;
 
 import com.tinys3.http.S3HttpExchange;
+import com.tinys3.io.FileOperations;
+import com.tinys3.io.StorageException;
 import com.tinys3.response.*;
 import java.io.*;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
 import java.util.*;
@@ -14,13 +15,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class DefaultS3FileOperations implements S3FileOperations {
-
-  private final String storagePath;
-
+  private final FileOperations fileOps;
   private final Map<String, List<PartInfo>> multipartUploads = new ConcurrentHashMap<>();
 
-  public DefaultS3FileOperations(String storagePath) {
-    this.storagePath = storagePath;
+  public DefaultS3FileOperations(FileOperations fileOps) {
+    this.fileOps = fileOps;
   }
 
   @Override
@@ -32,10 +31,9 @@ public class DefaultS3FileOperations implements S3FileOperations {
   }
 
   @Override
-  public ListAllBucketsResult getListAllBucketsResult(String accessKey) throws IOException {
-    Path currentPath = Paths.get(storagePath);
-    List<Path> buckets = Files.list(currentPath).toList();
-    return ListAllBucketsResult.fromPaths(buckets, accessKey);
+  public ListAllBucketsResult getListAllBucketsResult(String accessKey) throws StorageException {
+    FileOperations.FileEntry[] buckets = fileOps.listBuckets();
+    return ListAllBucketsResult.fromBuckets(buckets, accessKey);
   }
 
   @Override
@@ -45,80 +43,72 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
   @Override
   public String handleUploadPart(String uploadId, Map<String, String> queryParams, byte[] payload)
-      throws IOException {
+      throws StorageException {
     int partNumber = Integer.parseInt(queryParams.get("partNumber"));
-    Path tempDir = Files.createTempDirectory("multipart-");
-    Path tempFile = tempDir.resolve("part-" + partNumber);
+    String tempDir = fileOps.createTempDirectory("multipart-");
+    String tempFilePath = tempDir + "/part-" + partNumber;
 
-    try (InputStream is = new ByteArrayInputStream(payload);
-        OutputStream os = Files.newOutputStream(tempFile)) {
-      byte[] buffer = new byte[8192];
-      int bytesRead;
-      while ((bytesRead = is.read(buffer)) != -1) {
-        os.write(buffer, 0, bytesRead);
-      }
-      os.flush();
-    }
+    fileOps.writeFile(tempFilePath, payload);
 
-    String eTag = S3Utils.calculateETag(tempFile, false, List.of());
-    multipartUploads.get(uploadId).add(new PartInfo(partNumber, eTag, tempFile));
+    Path tempPath = Path.of(tempFilePath);
+    String eTag = S3Utils.calculateETag(tempPath, false, List.of());
+    multipartUploads.get(uploadId).add(new PartInfo(partNumber, eTag, tempPath));
     return eTag;
   }
 
   @Override
   public CompleteMultipartUploadResult getCompleteMultipartUploadResult(
-      String bucketName, String key, String uploadId) throws IOException {
-    Path bucketPath = Paths.get(storagePath, bucketName);
-    Path finalPath = bucketPath.resolve(key);
-    Files.createDirectories(finalPath.getParent());
+      String bucketName, String key, String uploadId) throws StorageException {
+    String finalPath = getObjectPath(bucketName, key);
+    fileOps.createParentDirectories(finalPath);
 
     List<PartInfo> parts = multipartUploads.get(uploadId);
     List<String> eTags = parts.stream().map(e -> e.eTag).toList();
     parts.sort((a, b) -> Integer.compare(a.partNumber, b.partNumber));
 
-    try (OutputStream os = Files.newOutputStream(finalPath)) {
-      for (PartInfo part : parts) {
-        Files.copy(part.tempPath, os);
-        Files.delete(part.tempPath);
-      }
-      os.flush();
+    // Combine all parts into final file
+    ByteArrayOutputStream combined = new ByteArrayOutputStream();
+    for (PartInfo part : parts) {
+      byte[] partData = fileOps.readFile(part.tempPath.toString());
+      combined.write(partData, 0, partData.length);
+      fileOps.delete(part.tempPath.toString());
     }
+
+    fileOps.writeFile(finalPath, combined.toByteArray());
 
     multipartUploads.remove(uploadId);
     return new CompleteMultipartUploadResult(
         bucketName,
         key,
-        Files.size(finalPath),
-        S3Utils.calculateETag(finalPath, true, eTags),
-        finalPath,
+        fileOps.getSize(finalPath),
+        S3Utils.calculateETag(Path.of(finalPath), true, eTags),
+        Path.of(finalPath),
         eTags);
   }
 
   @Override
-  public void handleAbortMultipartUpload(String uploadId) throws IOException {
+  public void handleAbortMultipartUpload(String uploadId) throws StorageException {
     List<PartInfo> parts = multipartUploads.remove(uploadId);
     if (parts != null) {
       for (PartInfo part : parts) {
-        Files.deleteIfExists(part.tempPath);
+        fileOps.delete(part.tempPath.toString());
       }
     }
   }
 
   @Override
   public boolean bucketExists(String bucketName) {
-    Path bucketPath = Paths.get(storagePath, bucketName);
-    return Files.exists(bucketPath);
+    return fileOps.exists(getObjectPath(bucketName, ""));
   }
 
   @Override
-  public void createDirectory(String bucketName) throws IOException {
-    Path bucketPath = getObjectPath(bucketName, "");
-    Files.createDirectory(bucketPath);
+  public void createDirectory(String bucketName) throws StorageException {
+    fileOps.createDirectory(getObjectPath(bucketName, ""));
   }
 
   @Override
   public BucketListResult getBucketListResult(S3HttpExchange exchange, String bucketName)
-      throws IOException {
+      throws StorageException {
     Map<String, String> queryParams = parseQueryString(exchange.getRequestURI().getQuery());
     boolean isV2 = "2".equals(queryParams.get("list-type"));
     String prefix = queryParams.getOrDefault("prefix", "");
@@ -126,22 +116,18 @@ public class DefaultS3FileOperations implements S3FileOperations {
     int maxKeys = Integer.parseInt(queryParams.getOrDefault("max-keys", "1000"));
     String continuationToken = queryParams.get(isV2 ? "continuation-token" : "marker");
 
-    Path objectPath = getObjectPath(bucketName, "");
-    List<Path> allObjects =
-        Files.walk(objectPath)
-            .filter(Files::isRegularFile)
-            .filter(
-                p -> {
-                  String key = objectPath.relativize(p).toString();
-                  return key.startsWith(prefix);
-                })
-            .sorted()
+    FileOperations.FileEntry[] allEntries = fileOps.list(bucketName);
+    List<FileOperations.FileEntry> allObjects =
+        Arrays.stream(allEntries)
+            .filter(entry -> !entry.isDirectory())
+            .filter(entry -> entry.getPath().startsWith(prefix)) // TODO: FIX PREFIX
+            .sorted(Comparator.comparing(FileOperations.FileEntry::getPath))
             .toList();
 
     int startIndex = 0;
     if (continuationToken != null) {
       for (int i = 0; i < allObjects.size(); i++) {
-        if (objectPath.relativize(allObjects.get(i)).toString().compareTo(continuationToken) > 0) {
+        if (allObjects.get(i).getPath().compareTo(continuationToken) > 0) {
           startIndex = i;
           break;
         }
@@ -149,13 +135,13 @@ public class DefaultS3FileOperations implements S3FileOperations {
     }
 
     Set<String> commonPrefixes = new HashSet<>();
-    List<Path> objects = new ArrayList<>();
+    List<FileOperations.FileEntry> objects = new ArrayList<>();
     int count = 0;
     String nextContinuationToken = null;
 
     for (int i = startIndex; i < allObjects.size() && count < maxKeys; i++) {
-      Path object = allObjects.get(i);
-      String key = objectPath.relativize(object).toString();
+      FileOperations.FileEntry object = allObjects.get(i);
+      String key = object.getPath();
 
       if (!delimiter.isEmpty()) {
         int delimiterIndex = key.indexOf(delimiter, prefix.length());
@@ -172,21 +158,18 @@ public class DefaultS3FileOperations implements S3FileOperations {
       count++;
 
       if (count == maxKeys && i + 1 < allObjects.size()) {
-        nextContinuationToken = objectPath.relativize(allObjects.get(i + 1)).toString();
+        nextContinuationToken = allObjects.get(i + 1).getPath();
       }
     }
 
-    var objectsFinal =
+    List<BucketObject> bucketObjects =
         objects.stream()
             .map(
-                path -> {
-                  try {
-                    return new BucketObject(
-                        path, Files.size(path), Files.getLastModifiedTime(path));
-                  } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                  }
-                })
+                entry ->
+                    new BucketObject(
+                        entry.getPath(),
+                        entry.getSize(),
+                        FileTime.fromMillis(entry.getLastModified())))
             .collect(Collectors.toList());
 
     return new BucketListResult.Builder()
@@ -197,7 +180,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
         .continuationToken(continuationToken)
         .nextContinuationToken(nextContinuationToken)
         .commonPrefixes(commonPrefixes)
-        .objects(objectsFinal)
+        .objects(bucketObjects)
         .bucketPath(bucketName)
         .isV2(isV2)
         .build();
@@ -205,81 +188,65 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
   @Override
   public boolean objectExists(String bucketName, String key) {
-    var objectPath = Paths.get(storagePath, bucketName, key);
-    return Files.exists(objectPath);
+    return fileOps.exists(getObjectPath(bucketName, key));
   }
 
   @Override
-  public String handlePutObject(String bucketName, String key, byte[] payload) throws IOException {
-    Path objectPath = Paths.get(storagePath, bucketName, key);
-    Files.createDirectories(objectPath.getParent());
-
-    try (InputStream is = new ByteArrayInputStream(payload);
-        OutputStream os = Files.newOutputStream(objectPath)) {
-      byte[] buffer = new byte[8192];
-      int bytesRead;
-      while ((bytesRead = is.read(buffer)) != -1) {
-        os.write(buffer, 0, bytesRead);
-      }
-    }
+  public String handlePutObject(String bucketName, String key, byte[] payload)
+      throws StorageException {
+    String objectPath = getObjectPath(bucketName, key);
+    fileOps.createParentDirectories(objectPath);
+    fileOps.writeFile(objectPath, payload);
     return calculateETag(bucketName, key, false, List.of());
   }
 
   @Override
-  public void handleDeleteObject(String bucketName, String key) throws IOException {
-    var objectPath = Paths.get(storagePath, bucketName, key);
-    Files.delete(objectPath);
+  public void handleDeleteObject(String bucketName, String key) throws StorageException {
+    fileOps.delete(getObjectPath(bucketName, key));
   }
 
   @Override
-  public boolean bucketHasFiles(String bucketName) throws IOException {
-    Path path = getObjectPath(bucketName, "");
-    return Files.list(path).findFirst().isPresent();
+  public boolean bucketHasFiles(String bucketName) throws StorageException {
+    return !fileOps.isDirectoryEmpty(getObjectPath(bucketName, ""));
   }
 
   @Override
-  public void getObject(S3HttpExchange exchange, String bucketName, String key) throws IOException {
-    var objectPath = getObjectPath(bucketName, key);
-    try (InputStream is = Files.newInputStream(objectPath)) {
+  public void getObject(S3HttpExchange exchange, String bucketName, String key)
+      throws StorageException {
+
+    String objectPath = getObjectPath(bucketName, key);
+    byte[] content = fileOps.readFile(objectPath);
+    try (OutputStream os = exchange.getResponseBody()) {
       exchange.getResponseHeaders().addHeader("Content-Type", "application/octet-stream");
-      exchange.sendResponseHeaders(200, Files.size(objectPath));
-
-      try (OutputStream os = exchange.getResponseBody()) {
-        byte[] buffer = new byte[8192];
-        int bytesRead;
-        while ((bytesRead = is.read(buffer)) != -1) {
-          os.write(buffer, 0, bytesRead);
-        }
-      }
+      exchange.sendResponseHeaders(200, content.length);
+      os.write(content);
+    } catch (IOException e) {
+      throw new StorageException("Failed to write response", e);
     }
   }
 
   @Override
-  public long getSize(String bucketName, String key) throws IOException {
-    Path bucketPath = getObjectPath(bucketName, key);
-    return Files.size(bucketPath);
+  public long getSize(String bucketName, String key) throws StorageException {
+    return fileOps.getSize(getObjectPath(bucketName, key));
   }
 
   @Override
-  public FileTime getLastModifiedTime(String bucketName, String key) throws IOException {
-    var objectPath = getObjectPath(bucketName, key);
-    return Files.getLastModifiedTime(objectPath);
+  public FileTime getLastModifiedTime(String bucketName, String key) throws StorageException {
+    return fileOps.getLastModifiedTime(getObjectPath(bucketName, key));
   }
 
   @Override
   public String calculateETag(
       String bucketName, String key, boolean isMultipart, List<String> partETags) {
     try {
-      Path objectPath = getObjectPath(bucketName, key);
-      MessageDigest md = MessageDigest.getInstance("MD5");
       if (!isMultipart) {
-        // Single upload ETag
-        byte[] hash = md.digest(Files.readAllBytes(objectPath));
+        byte[] content = fileOps.readFile(getObjectPath(bucketName, key));
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        byte[] hash = md.digest(content);
         return "\"" + Base64.getEncoder().encodeToString(hash) + "\"";
       } else {
-        // Multipart upload ETag
+        MessageDigest md = MessageDigest.getInstance("MD5");
         for (String partETag : partETags) {
-          // Remove quotes from part ETags
           String cleanPartETag = partETag.replaceAll("\"", "");
           md.update(Base64.getDecoder().decode(cleanPartETag));
         }
@@ -292,45 +259,18 @@ public class DefaultS3FileOperations implements S3FileOperations {
   }
 
   @Override
-  public Path getObjectPath(String bucketName, String key) {
-    return Paths.get(storagePath, bucketName, key);
+  public String getObjectPath(String bucketName, String key) {
+    return fileOps.getObjectPath(bucketName, key);
   }
 
   @Override
   public void copyObject(
-      String sourceBucketName, String sourceKey, String destBucketName, String destKey) {
-    try {
-      Path sourcePath = getObjectPath(sourceBucketName, sourceKey);
-      Path destPath = getObjectPath(destBucketName, destKey);
+      String sourceBucketName, String sourceKey, String destBucketName, String destKey)
+      throws StorageException {
+    String sourcePath = getObjectPath(sourceBucketName, sourceKey);
+    String destPath = getObjectPath(destBucketName, destKey);
 
-      Files.createDirectories(destPath.getParent());
-
-      Files.copy(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING);
-
-      BasicFileAttributes sourceAttrs = Files.readAttributes(sourcePath, BasicFileAttributes.class);
-      FileTime creationTime = sourceAttrs.creationTime();
-      FileTime lastModifiedTime = sourceAttrs.lastModifiedTime();
-      FileTime lastAccessTime = sourceAttrs.lastAccessTime();
-
-      Files.setAttribute(destPath, "creationTime", creationTime);
-      Files.setAttribute(destPath, "lastModifiedTime", lastModifiedTime);
-      Files.setAttribute(destPath, "lastAccessTime", lastAccessTime);
-
-    } catch (NoSuchFileException e) {
-      throw new RuntimeException(
-          "Source object not found: " + sourceBucketName + "/" + sourceKey, e);
-    } catch (IOException e) {
-      throw new RuntimeException(
-          "Failed to copy object from "
-              + sourceBucketName
-              + "/"
-              + sourceKey
-              + " to "
-              + destBucketName
-              + "/"
-              + destKey,
-          e);
-    }
+    fileOps.createParentDirectories(destPath);
+    fileOps.copy(sourcePath, destPath);
   }
-
 }

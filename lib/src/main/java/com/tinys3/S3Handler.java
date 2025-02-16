@@ -7,6 +7,7 @@ import com.tinys3.auth.Credentials;
 import com.tinys3.auth.S3Authenticator;
 import com.tinys3.http.S3HttpExchange;
 import com.tinys3.http.S3HttpHeaders;
+import com.tinys3.io.StorageException;
 import com.tinys3.response.CopyObjectResult;
 import java.io.IOException;
 import java.security.InvalidKeyException;
@@ -93,7 +94,7 @@ public class S3Handler {
       String method,
       String query,
       byte[] payload)
-      throws IOException {
+      throws IOException, StorageException {
     Map<String, String> queryParams = parseQueryString(query);
     String uploadId = queryParams.get("uploadId");
 
@@ -111,7 +112,7 @@ public class S3Handler {
 
   private void handleUploadPart(
       S3HttpExchange exchange, String uploadId, Map<String, String> queryParams, byte[] payload)
-      throws IOException {
+      throws IOException, StorageException {
     String eTag = fileSystem.handleUploadPart(uploadId, queryParams, payload);
 
     exchange.getResponseHeaders().addHeader("ETag", "\"" + eTag + "\"");
@@ -131,20 +132,20 @@ public class S3Handler {
   }
 
   private void handleAbortMultipartUpload(S3HttpExchange exchange, String uploadId)
-      throws IOException {
+      throws IOException, StorageException {
     fileSystem.handleAbortMultipartUpload(uploadId);
     exchange.sendResponseHeaders(204, -1);
     exchange.getResponseBody().close();
   }
 
   private void handleListBuckets(S3HttpExchange exchange, Credentials credentials)
-      throws IOException {
+      throws IOException, StorageException {
     var result = fileSystem.getListAllBucketsResult(credentials.accessKey());
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
   private void handleBucketOperation(S3HttpExchange exchange, String bucketName, String method)
-      throws IOException {
+      throws IOException, StorageException {
     switch (method) {
       case "HEAD":
         handleHeadObject(exchange, bucketName, "", null);
@@ -165,7 +166,7 @@ public class S3Handler {
 
   private void handleHeadObject(
       S3HttpExchange exchange, String bucketName, String objectKey, byte[] payload)
-      throws IOException {
+      throws IOException, StorageException {
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
@@ -193,7 +194,8 @@ public class S3Handler {
     exchange.sendResponseHeaders(200, -1);
   }
 
-  private void handleListObjects(S3HttpExchange exchange, String bucketName) throws IOException {
+  private void handleListObjects(S3HttpExchange exchange, String bucketName)
+      throws IOException, StorageException {
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
@@ -204,7 +206,8 @@ public class S3Handler {
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
-  private void handleCreateBucket(S3HttpExchange exchange, String bucketName) throws IOException {
+  private void handleCreateBucket(S3HttpExchange exchange, String bucketName)
+      throws IOException, StorageException {
 
     if (fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 409, "BucketAlreadyExists");
@@ -215,7 +218,8 @@ public class S3Handler {
     sendResponse(exchange, 200, "", "application/xml");
   }
 
-  private void handleDeleteBucket(S3HttpExchange exchange, String bucketName) throws IOException {
+  private void handleDeleteBucket(S3HttpExchange exchange, String bucketName)
+      throws IOException, StorageException {
 
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
@@ -233,7 +237,7 @@ public class S3Handler {
 
   private void handleObjectOperation(
       S3HttpExchange exchange, String bucketName, String key, String method, byte[] payload)
-      throws IOException {
+      throws IOException, StorageException {
 
     switch (method) {
       case "GET":
@@ -258,7 +262,7 @@ public class S3Handler {
   }
 
   private void handleCopyObject(S3HttpExchange exchange, String destBucketName, String destKey)
-      throws IOException {
+      throws IOException, StorageException {
     String copySource = exchange.getRequestHeaders().getFirst("x-amz-copy-source");
     if (copySource == null) {
       sendError(exchange, 400, "MissingParameter");
@@ -294,7 +298,7 @@ public class S3Handler {
   }
 
   private void handleGetObject(S3HttpExchange exchange, String bucketName, String key)
-      throws IOException {
+      throws IOException, StorageException {
     if (!fileSystem.objectExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
@@ -304,7 +308,8 @@ public class S3Handler {
   }
 
   private void handlePutObject(
-      S3HttpExchange exchange, String bucketName, String key, byte[] payload) throws IOException {
+      S3HttpExchange exchange, String bucketName, String key, byte[] payload)
+      throws IOException, StorageException {
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
@@ -316,7 +321,7 @@ public class S3Handler {
   }
 
   private void handleDeleteObject(S3HttpExchange exchange, String bucketName, String key)
-      throws IOException {
+      throws IOException, StorageException {
     if (!fileSystem.objectExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
