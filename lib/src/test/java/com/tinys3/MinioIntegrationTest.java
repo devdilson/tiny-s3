@@ -8,6 +8,7 @@ import io.minio.errors.*;
 import io.minio.http.Method;
 import io.minio.messages.Bucket;
 import io.minio.messages.Item;
+import io.minio.messages.Part;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -61,7 +62,7 @@ public class MinioIntegrationTest {
         new S3Server.Builder()
             .withPort(DEFAULT_PORT)
             .withStorageDir("storage")
-            .withInMemory()
+            // .withInMemory()
             .withCredentials(credential)
             .build();
 
@@ -238,6 +239,7 @@ public class MinioIntegrationTest {
     }
 
     Map<Integer, String> completedParts = new HashMap<>();
+    List<Part> parts = new ArrayList<>();
     for (int i = 1; i <= numParts; i++) {
       // Calculate the part data
       int start = (i - 1) * partSize;
@@ -263,14 +265,32 @@ public class MinioIntegrationTest {
                 .firstValue("ETag")
                 .orElseThrow(() -> new RuntimeException("ETag not found in response"));
         completedParts.put(i, etag);
+        parts.add(new Part(i, etag));
       } else {
         throw new RuntimeException("Failed to upload part " + i + ": " + response.statusCode());
       }
     }
-    String uploadIdNew =
-        customMinioClient.completeMultipartUpload(bucketName, "us-east-1", objectName, null, null);
+    ObjectWriteResponse uploadIdNew =
+        customMinioClient.completeMultipartUpload(
+            bucketName, "us-east-1", objectName, uploadId, parts, null, null);
     assertNotNull(uploadIdNew);
     assertEquals(numParts, completedParts.size());
+
+    // Verify the file exists and has correct size
+    StatObjectResponse stat =
+        minioClient.statObject(
+            StatObjectArgs.builder().bucket(bucketName).object(objectName).build());
+
+    assertNotNull(stat);
+    assertEquals(testData.length, stat.size());
+
+    // Optional: Verify content if needed
+    GetObjectResponse response =
+        minioClient.getObject(
+            GetObjectArgs.builder().bucket(bucketName).object(objectName).build());
+
+    byte[] downloadedData = response.readAllBytes();
+    assertArrayEquals(testData, downloadedData);
   }
 
   private File createTestFile(String filename, String content) throws Exception {
