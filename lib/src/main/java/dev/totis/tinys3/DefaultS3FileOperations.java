@@ -7,7 +7,6 @@ import dev.totis.tinys3.io.FileEntry;
 import dev.totis.tinys3.io.FileOperations;
 import dev.totis.tinys3.io.StorageException;
 import dev.totis.tinys3.response.*;
-
 import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
