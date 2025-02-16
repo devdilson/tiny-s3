@@ -2,7 +2,6 @@ package com.tinys3;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.sun.net.httpserver.HttpServer;
 import com.tinys3.auth.Credentials;
 import io.minio.*;
 import io.minio.errors.*;
@@ -21,7 +20,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
@@ -36,25 +34,33 @@ public class MinioIntegrationTest {
   private static final String BUCKET_NAME = "mybucket";
   private static final int DEFAULT_PORT = 8000;
   private static final String ENDPOINT = "http://localhost:" + DEFAULT_PORT;
-  private static final String ACCESS_KEY = "12345";
-  private static final String SECRET_KEY = "12345";
+  private static final Credentials credential = new Credentials("12345", "12345", "us-east-1");
 
-  private HttpServer server;
+  private S3Server server;
 
   @BeforeAll
   void setup() {
     minioClient =
-        MinioClient.builder().endpoint(ENDPOINT).credentials(ACCESS_KEY, SECRET_KEY).build();
+        MinioClient.builder()
+            .endpoint(ENDPOINT)
+            .credentials(credential.accessKey(), credential.secretKey())
+            .build();
+
     server =
-        S3Server.getHttpServer(
-            DEFAULT_PORT, Map.of(ACCESS_KEY, new Credentials(ACCESS_KEY, SECRET_KEY, "us-east-1")));
+        new S3Server.Builder()
+            .withPort(DEFAULT_PORT)
+            .withStorageDir("storage")
+            .withInMemory()
+            .withCredentials(credential)
+            .build();
+
     server.start();
     System.out.println("Minio server started");
   }
 
   @AfterAll
   void stop() {
-    server.stop(0);
+    server.stop();
     System.out.println("Minio server stopped");
   }
 

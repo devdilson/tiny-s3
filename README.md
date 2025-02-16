@@ -9,6 +9,7 @@ A lightweight no-dependencies S3-compatible server implementation in Java.
 - Presigned URL support
 - Multi-user credentials
 - MinIO client compatibility
+- In-memory file system
 
 ## Supported Operations
 
@@ -37,12 +38,19 @@ A lightweight no-dependencies S3-compatible server implementation in Java.
 
 ## Quick Start
 
+### Basic Server Setup
+
 ```java
-// Start server with credentials
-Map<String, Credentials> creds = Map.of(
-    "access-key", new Credentials("access-key", "secret-key", "us-east-1")
-);
-HttpServer server = S3Server.getHttpServer(8000, creds);
+// Create credentials
+Credentials cred = new Credentials("access-key", "secret-key", "us-east-1");
+
+// Build and start server
+S3Server server = new S3Server.Builder()
+        .withPort(8000)
+        .withCredentials(cred)
+        .withStorageDir("storage")  // Local directory for storage
+        .build();
+
 server.start();
 ```
 
@@ -79,3 +87,6 @@ GNU Affero General Public License version 3 (AGPL v3)
 TinyS3 is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License along with this program. If not, see https://www.gnu.org/licenses/agpl-3.0.html.
+
+
+
