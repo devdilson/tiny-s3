@@ -14,7 +14,7 @@ import java.util.concurrent.Executors;
 
 public class S3Server {
 
-  public static void main(String[] args) throws IOException {
+  public static void main(String[] args) {
     int port = 8080;
     Credentials credential = new Credentials("12345", "12345", "us-east-1");
     HttpServer server = getHttpServer(port, Map.of(credential.accessKey(), credential));

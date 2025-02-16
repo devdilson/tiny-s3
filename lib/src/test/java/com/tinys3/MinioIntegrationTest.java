@@ -5,19 +5,30 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.sun.net.httpserver.HttpServer;
 import com.tinys3.auth.Credentials;
 import io.minio.*;
-import io.minio.errors.ErrorResponseException;
+import io.minio.errors.*;
 import io.minio.http.Method;
 import io.minio.messages.Bucket;
 import io.minio.messages.Item;
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntConsumer;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -289,11 +300,9 @@ public class MinioIntegrationTest {
     assertEquals(content, downloadedContent);
 
     // Remove objects
-    minioClient.removeObject(
-        RemoveObjectArgs.builder().bucket(BUCKET_NAME).object(copyObjectName).build());
+    cleanUpData(copyObjectName);
 
-    minioClient.removeObject(
-        RemoveObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
+    cleanUpData(objectName);
 
     // Verify objects are deleted
     assertThrows(
@@ -304,5 +313,130 @@ public class MinioIntegrationTest {
 
     // Cleanup
     testFile.delete();
+  }
+
+  @Test
+  void testConcurrentOperations() throws Exception {
+    int numThreads = 50;
+    int requestsPerThread = 100;
+    int totalRequests = numThreads * requestsPerThread;
+
+    try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+      CountDownLatch latch = new CountDownLatch(totalRequests);
+      AtomicInteger successfulRequests = new AtomicInteger(0);
+      AtomicInteger failedRequests = new AtomicInteger(0);
+
+      byte[] testData = "Test content for concurrent operations".getBytes();
+
+      List<Future<?>> futures =
+          IntStream.range(0, numThreads)
+              .mapToObj(
+                  threadId ->
+                      executorService.submit(
+                          () ->
+                              IntStream.range(0, requestsPerThread)
+                                  .forEach(
+                                          performRequestTests(threadId, testData, successfulRequests, failedRequests, latch))))
+              .collect(Collectors.toList());
+
+      boolean completed = latch.await(5, TimeUnit.MINUTES);
+
+      assertTrue(completed && !futures.isEmpty(), "Not all requests completed within timeout");
+
+      int totalProcessed = successfulRequests.get() + failedRequests.get();
+      assertEquals(
+          totalRequests, totalProcessed, "Total processed requests should match expected total");
+
+      double successRate = (double) successfulRequests.get() / totalRequests * 100;
+      System.out.printf(
+          "Success rate: %.2f%% (%d/%d requests successful)%n",
+          successRate, successfulRequests.get(), totalRequests);
+
+      assertTrue(successRate >= 100, "Success rate should be 100%");
+    }
+  }
+
+  @NotNull
+  private IntConsumer performRequestTests(int threadId, byte[] testData, AtomicInteger successfulRequests, AtomicInteger failedRequests, CountDownLatch latch) {
+    return requestId -> {
+      String objectName =
+              String.format(
+                      "concurrent-test/thread-%d-object-%d.txt",
+                      threadId, requestId);
+
+      try {
+        minioPutObject(objectName, testData);
+
+        downloadAndVerifyData(
+                objectName,
+                testData,
+                successfulRequests,
+                failedRequests);
+
+        cleanUpData(objectName);
+
+      } catch (Exception e) {
+        failedRequests.incrementAndGet();
+        System.err.printf(
+                "Error in thread %d, request %d: %s%n",
+                threadId, requestId, e.getMessage());
+      } finally {
+        latch.countDown();
+      }
+    };
+  }
+
+  private void cleanUpData(String objectName)
+      throws ErrorResponseException,
+          InsufficientDataException,
+          InternalException,
+          InvalidKeyException,
+          InvalidResponseException,
+          IOException,
+          NoSuchAlgorithmException,
+          ServerException,
+          XmlParserException {
+    // Clean up
+    minioClient.removeObject(
+        RemoveObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
+  }
+
+  private void downloadAndVerifyData(
+      String objectName,
+      byte[] testData,
+      AtomicInteger successfulRequests,
+      AtomicInteger failedRequests)
+      throws IOException {
+    // Download and verify object
+    try (InputStream stream =
+        minioClient.getObject(
+            GetObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build())) {
+
+      byte[] downloadedData = stream.readAllBytes();
+      if (Arrays.equals(testData, downloadedData)) {
+        successfulRequests.incrementAndGet();
+      } else {
+        failedRequests.incrementAndGet();
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private void minioPutObject(String objectName, byte[] testData)
+      throws ErrorResponseException,
+          InsufficientDataException,
+          InternalException,
+          InvalidKeyException,
+          InvalidResponseException,
+          IOException,
+          NoSuchAlgorithmException,
+          ServerException,
+          XmlParserException {
+    // Upload object
+    minioClient.putObject(
+        PutObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).stream(
+                new ByteArrayInputStream(testData), testData.length, -1)
+            .build());
   }
 }
