@@ -22,7 +22,7 @@ public class S3Handler {
   private final Map<String, Credentials> credentials;
   private final String storagePath;
   private final S3Authenticator authenticator;
-  private final DefaultS3FileOperations fileSystem;
+  private final S3FileOperations fileSystem;
 
   public S3Handler(
       Map<String, Credentials> credentials, String storagePath, S3Authenticator authenticator) {
