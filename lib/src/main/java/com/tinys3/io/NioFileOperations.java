@@ -5,10 +5,9 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 
-/** Implementation of FileOperations using java.nio */
 public class NioFileOperations implements FileOperations {
 
-  private String storagePath;
+  private final String storagePath;
 
   public NioFileOperations(String storagePath) {
     this.storagePath = storagePath;
