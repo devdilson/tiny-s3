@@ -186,8 +186,8 @@ public class DefaultS3FileOperations implements S3FileOperations {
   }
 
   @Override
-  public boolean objectExists(String bucketName, String key) {
-    return fileOps.exists(getObjectPath(bucketName, key));
+  public boolean objectNotExists(String bucketName, String key) {
+    return !fileOps.exists(getObjectPath(bucketName, key));
   }
 
   @Override
@@ -206,7 +206,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
   @Override
   public boolean bucketHasFiles(String bucketName) throws StorageException {
-    return !fileOps.isDirectoryEmpty(getObjectPath(bucketName, ""));
+    return fileOps.isDirectoryNotEmpty(getObjectPath(bucketName, ""));
   }
 
   @Override

@@ -126,9 +126,9 @@ public class NioFileOperations implements FileOperations {
   }
 
   @Override
-  public boolean isDirectoryEmpty(String path) throws StorageException {
+  public boolean isDirectoryNotEmpty(String path) throws StorageException {
     try {
-      return !Files.list(Paths.get(path)).findFirst().isPresent();
+      return Files.list(Paths.get(path)).findFirst().isPresent();
     } catch (IOException e) {
       throw new StorageException("Failed to check if directory is empty: " + path, e);
     }

@@ -32,7 +32,7 @@ public interface S3FileOperations {
   BucketListResult getBucketListResult(S3HttpExchange exchange, String bucketName)
       throws StorageException;
 
-  boolean objectExists(String bucketName, String key);
+  boolean objectNotExists(String bucketName, String key);
 
   String handlePutObject(String bucketName, String key, byte[] payload) throws StorageException;
 

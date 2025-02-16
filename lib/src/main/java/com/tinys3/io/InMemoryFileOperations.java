@@ -77,7 +77,7 @@ public class InMemoryFileOperations implements FileOperations {
               .filter(key -> key.startsWith(path + "/"))
               .collect(Collectors.toList());
 
-      if (!children.isEmpty() && !isDirectoryEmpty(path)) {
+      if (!children.isEmpty() && isDirectoryNotEmpty(path)) {
         throw new StorageException("Directory not empty: " + path);
       }
 
@@ -142,14 +142,14 @@ public class InMemoryFileOperations implements FileOperations {
   }
 
   @Override
-  public boolean isDirectoryEmpty(String path) throws StorageException {
+  public boolean isDirectoryNotEmpty(String path) throws StorageException {
     FileData data = storage.get(path);
     if (data == null || !data.isDirectory) {
       throw new StorageException("Path does not exist or is not a directory: " + path);
     }
 
     String prefix = path + "/";
-    return storage.keySet().stream().noneMatch(key -> key.startsWith(prefix));
+    return storage.keySet().stream().anyMatch(key -> key.startsWith(prefix));
   }
 
   @Override

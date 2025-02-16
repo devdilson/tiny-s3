@@ -172,7 +172,7 @@ public class S3Handler {
       return;
     }
 
-    if (!fileSystem.objectExists(bucketName, objectKey) && !objectKey.isEmpty()) {
+    if (fileSystem.objectNotExists(bucketName, objectKey) && !objectKey.isEmpty()) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
@@ -281,7 +281,7 @@ public class S3Handler {
     String sourceBucketName = sourceParts[0];
     String sourceKey = sourceParts[1];
 
-    if (!fileSystem.objectExists(sourceBucketName, sourceKey)) {
+    if (fileSystem.objectNotExists(sourceBucketName, sourceKey)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
@@ -299,7 +299,7 @@ public class S3Handler {
 
   private void handleGetObject(S3HttpExchange exchange, String bucketName, String key)
       throws IOException, StorageException {
-    if (!fileSystem.objectExists(bucketName, key)) {
+    if (fileSystem.objectNotExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
@@ -322,7 +322,7 @@ public class S3Handler {
 
   private void handleDeleteObject(S3HttpExchange exchange, String bucketName, String key)
       throws IOException, StorageException {
-    if (!fileSystem.objectExists(bucketName, key)) {
+    if (fileSystem.objectNotExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }

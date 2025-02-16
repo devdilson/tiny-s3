@@ -4,7 +4,7 @@ import com.sun.net.httpserver.HttpServer;
 import com.tinys3.auth.Credentials;
 import com.tinys3.auth.DefaultAuthenticator;
 import com.tinys3.http.HttpExchangeAdapter;
-import com.tinys3.io.NioFileOperations;
+import com.tinys3.io.InMemoryFileOperations;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
@@ -35,7 +35,7 @@ public class S3Server {
           new S3Handler(
               credentials,
               new DefaultAuthenticator(credentials),
-              new DefaultS3FileOperations(new NioFileOperations(storagePath)));
+              new DefaultS3FileOperations(new InMemoryFileOperations(storagePath)));
       S3HttpServerAdapter adapter =
           () ->
               (e) -> {

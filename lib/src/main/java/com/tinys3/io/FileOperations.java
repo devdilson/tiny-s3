@@ -41,7 +41,7 @@ public interface FileOperations {
   String createTempDirectory(String prefix) throws StorageException;
 
   /** Checks if the directory is empty */
-  boolean isDirectoryEmpty(String path) throws StorageException;
+  boolean isDirectoryNotEmpty(String path) throws StorageException;
 
   String getObjectPath(String bucketName, String key);
 
