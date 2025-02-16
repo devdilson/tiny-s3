@@ -5,9 +5,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.sun.net.httpserver.HttpServer;
 import com.tinys3.auth.Credentials;
 import io.minio.*;
+import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
+import io.minio.messages.Bucket;
 import io.minio.messages.Item;
 import java.io.File;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -91,7 +94,7 @@ public class MinioIntegrationTest {
   void testUploadSingleFile() throws Exception {
     // Test equivalent to: aws s3 cp README.md s3://mybucket/
     String objectName = "README.md";
-    File testFile = createTestFile(objectName);
+    File testFile = createTestFile(objectName, "test");
 
     minioClient.uploadObject(
         UploadObjectArgs.builder()
@@ -175,9 +178,9 @@ public class MinioIntegrationTest {
     deleteDirectory(testDir);
   }
 
-  private File createTestFile(String filename) throws Exception {
+  private File createTestFile(String filename, String content) throws Exception {
     File file = new File(filename);
-    Files.write(file.toPath(), "Test content".getBytes());
+    Files.write(file.toPath(), content.getBytes());
     return file;
   }
 
@@ -208,5 +211,98 @@ public class MinioIntegrationTest {
                 throw new RuntimeException(e);
               }
             });
+  }
+
+  @Test
+  void testBucketOperations() throws Exception {
+    String testBucket = "test-bucket-ops";
+
+    boolean bucketExists =
+        minioClient.bucketExists(BucketExistsArgs.builder().bucket(testBucket).build());
+
+    if (!bucketExists) {
+      minioClient.makeBucket(MakeBucketArgs.builder().bucket(testBucket).build());
+    }
+
+    // Verify bucket exists
+    boolean exists =
+        minioClient.bucketExists(BucketExistsArgs.builder().bucket(testBucket).build());
+    assertTrue(exists, "Bucket should exist after creation");
+
+    // List buckets
+    List<Bucket> buckets = minioClient.listBuckets();
+    assertTrue(
+        buckets.stream().anyMatch(b -> b.name().equals(testBucket)),
+        "Test bucket should be in bucket list");
+
+    // Remove bucket
+    minioClient.removeBucket(RemoveBucketArgs.builder().bucket(testBucket).build());
+
+    // Verify bucket no longer exists
+    exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(testBucket).build());
+    assertFalse(exists, "Bucket should not exist after deletion");
+  }
+
+  @Test
+  void testObjectOperations() throws Exception {
+    String objectName = "test-object123.txt";
+    String content = "Hello, MinIO!";
+
+    // Create test file
+    File testFile = createTestFile(objectName, content);
+
+    // Upload object
+    minioClient.uploadObject(
+        UploadObjectArgs.builder()
+            .bucket(BUCKET_NAME)
+            .object(objectName)
+            .filename(testFile.getAbsolutePath())
+            .build());
+
+    // Get object info
+    StatObjectResponse stat =
+        minioClient.statObject(
+            StatObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
+    assertEquals(objectName, stat.object());
+
+    // Copy object
+    String copyObjectName = "copy-" + objectName;
+    minioClient.copyObject(
+        CopyObjectArgs.builder()
+            .bucket(BUCKET_NAME)
+            .object(copyObjectName)
+            .source(CopySource.builder().bucket(BUCKET_NAME).object(objectName).build())
+            .build());
+
+    // Verify copy exists
+    StatObjectResponse copyStat =
+        minioClient.statObject(
+            StatObjectArgs.builder().bucket(BUCKET_NAME).object(copyObjectName).build());
+    assertEquals(copyObjectName, copyStat.object());
+    assertEquals(stat.size(), copyStat.size());
+
+    // Download object
+    InputStream stream =
+        minioClient.getObject(
+            GetObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
+    String downloadedContent = new String(stream.readAllBytes());
+    assertEquals(content, downloadedContent);
+
+    // Remove objects
+    minioClient.removeObject(
+        RemoveObjectArgs.builder().bucket(BUCKET_NAME).object(copyObjectName).build());
+
+    minioClient.removeObject(
+        RemoveObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
+
+    // Verify objects are deleted
+    assertThrows(
+        ErrorResponseException.class,
+        () ->
+            minioClient.statObject(
+                StatObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build()));
+
+    // Cleanup
+    testFile.delete();
   }
 }

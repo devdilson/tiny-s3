@@ -11,9 +11,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
 import java.util.*;
@@ -36,10 +35,10 @@ public class DefaultS3FileOperations {
     return new InitiateMultipartUploadResult(bucketName, key, uploadId);
   }
 
-  public ListAllBucketsResult getListAllBucketsResult() throws IOException {
+  public ListAllBucketsResult getListAllBucketsResult(String accessKey) throws IOException {
     Path currentPath = Paths.get(storagePath);
     List<Path> buckets = Files.list(currentPath).toList();
-    return ListAllBucketsResult.fromPaths(buckets);
+    return ListAllBucketsResult.fromPaths(buckets, accessKey);
   }
 
   public boolean containsKey(String key) {
@@ -266,5 +265,41 @@ public class DefaultS3FileOperations {
 
   private Path getObjectPath(String bucketName, String key) {
     return Paths.get(storagePath, bucketName, key);
+  }
+
+  public void copyObject(
+      String sourceBucketName, String sourceKey, String destBucketName, String destKey) {
+    try {
+      Path sourcePath = getObjectPath(sourceBucketName, sourceKey);
+      Path destPath = getObjectPath(destBucketName, destKey);
+
+      Files.createDirectories(destPath.getParent());
+
+      Files.copy(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING);
+
+      BasicFileAttributes sourceAttrs = Files.readAttributes(sourcePath, BasicFileAttributes.class);
+      FileTime creationTime = sourceAttrs.creationTime();
+      FileTime lastModifiedTime = sourceAttrs.lastModifiedTime();
+      FileTime lastAccessTime = sourceAttrs.lastAccessTime();
+
+      Files.setAttribute(destPath, "creationTime", creationTime);
+      Files.setAttribute(destPath, "lastModifiedTime", lastModifiedTime);
+      Files.setAttribute(destPath, "lastAccessTime", lastAccessTime);
+
+    } catch (NoSuchFileException e) {
+      throw new RuntimeException(
+          "Source object not found: " + sourceBucketName + "/" + sourceKey, e);
+    } catch (IOException e) {
+      throw new RuntimeException(
+          "Failed to copy object from "
+              + sourceBucketName
+              + "/"
+              + sourceKey
+              + " to "
+              + destBucketName
+              + "/"
+              + destKey,
+          e);
+    }
   }
 }

@@ -14,10 +14,12 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
 
 public record ListAllBucketsResult(List<BucketInfo> buckets) {
-  public record BucketInfo(String name, FileTime creationTime) {
-    public static BucketInfo fromPath(Path bucket) throws IOException {
+  public record BucketInfo(String name, FileTime creationTime, String accessKey) {
+    public static BucketInfo fromPath(Path bucket, String accessKey) throws IOException {
       return new BucketInfo(
-          bucket.getFileName().toString(), (FileTime) Files.getAttribute(bucket, "creationTime"));
+          bucket.getFileName().toString(),
+          (FileTime) Files.getAttribute(bucket, "creationTime"),
+          accessKey);
     }
   }
 
@@ -27,6 +29,14 @@ public record ListAllBucketsResult(List<BucketInfo> buckets) {
     try {
       xml.writeStartDocument();
       xml.writeStartElement("ListAllMyBucketsResult");
+
+      // Add Owner section
+      xml.writeStartElement("Owner");
+      xml.writeStartElement("ID");
+      xml.writeCharacters("12345");
+      xml.writeEndElement(); // ID
+      xml.writeEndElement(); // Owner
+
       xml.writeStartElement("Buckets");
 
       for (BucketInfo bucket : buckets) {
@@ -56,13 +66,13 @@ public record ListAllBucketsResult(List<BucketInfo> buckets) {
     }
   }
 
-  public static ListAllBucketsResult fromPaths(List<Path> buckets) throws IOException {
+  public static ListAllBucketsResult fromPaths(List<Path> buckets, String accessKey) {
     List<BucketInfo> bucketInfos =
         buckets.stream()
             .map(
                 bucket -> {
                   try {
-                    return BucketInfo.fromPath(bucket);
+                    return BucketInfo.fromPath(bucket, accessKey);
                   } catch (IOException e) {
                     throw new UncheckedIOException(e);
                   }

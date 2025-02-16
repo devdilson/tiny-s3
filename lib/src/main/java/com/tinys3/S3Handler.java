@@ -55,7 +55,7 @@ public class S3Handler implements HttpHandler {
       }
 
       if (path.equals("/") && method.equals("GET")) {
-        handleListBuckets(exchange);
+        handleListBuckets(exchange, authenticator.getCredentials(exchange));
         return;
       }
 
@@ -141,8 +141,9 @@ public class S3Handler implements HttpHandler {
     exchange.getResponseBody().close();
   }
 
-  private void handleListBuckets(HttpExchange exchange) throws IOException {
-    var result = fileSystem.getListAllBucketsResult();
+  private void handleListBuckets(HttpExchange exchange, Credentials credentials)
+      throws IOException {
+    var result = fileSystem.getListAllBucketsResult(credentials.getAccessKey());
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
@@ -263,7 +264,7 @@ public class S3Handler implements HttpHandler {
     }
   }
 
-  private void handleCopyObject(HttpExchange exchange, String destBucketName, String destBucketKey)
+  private void handleCopyObject(HttpExchange exchange, String destBucketName, String destKey)
       throws IOException {
     String copySource = exchange.getRequestHeaders().getFirst("x-amz-copy-source");
     if (copySource == null) {
@@ -280,20 +281,22 @@ public class S3Handler implements HttpHandler {
       return;
     }
 
-    String sourceBucket = sourceParts[0];
+    String sourceBucketName = sourceParts[0];
     String sourceKey = sourceParts[1];
 
-    if (fileSystem.objectExists(sourceBucket, sourceKey)) {
+    if (fileSystem.objectExists(sourceBucketName, sourceKey)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
 
-    if (fileSystem.objectExists(destBucketName, destBucketKey)) {
+    if (!fileSystem.bucketExists(destBucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
     }
 
-    var result = new CopyObjectResult(destBucketName, destBucketKey, fileSystem);
+    fileSystem.copyObject(sourceBucketName, sourceKey, destBucketName, destKey);
+
+    var result = new CopyObjectResult(destBucketName, destKey, fileSystem);
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
