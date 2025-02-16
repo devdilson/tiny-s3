@@ -15,3 +15,6 @@ dependencies {
 application {
     mainClass = "com.tinys3.S3Server"
 }
+tasks.named<Test>("test") {
+    useJUnitPlatform()
+}

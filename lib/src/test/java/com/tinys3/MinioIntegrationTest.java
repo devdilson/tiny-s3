@@ -112,9 +112,25 @@ public class MinioIntegrationTest {
   }
 
   @Test
+  void testUploadMultipleFiles() throws Exception {
+    String objectName = "generated_20mb.file";
+    var file = this.getClass().getClassLoader().getResource(objectName).getFile();
+    minioClient.uploadObject(
+        UploadObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).filename(file).build());
+
+    StatObjectResponse stat =
+        minioClient.statObject(
+            StatObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
+
+    assertNotNull(stat, "File metadata should not be null");
+    assertEquals(objectName, stat.object(), "Object name should match");
+    assertEquals(20 * 1024 * 1024, stat.size(), "File size should be 20MB");
+    assertEquals("application/octet-stream", stat.contentType(), "Content type should be binary");
+  }
+
+  @Test
   void testRecursiveDirectoryUpload() throws Exception {
-    // Test equivalent to: aws s3 cp ./TypeScript-Client s3://mybucket/myfolder --recursive
-    String sourceDir = "TypeScript-Client";
+    String sourceDir = "Test";
     String targetPrefix = "myfolder/";
 
     // Create test directory structure
