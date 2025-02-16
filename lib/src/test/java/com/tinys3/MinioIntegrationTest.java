@@ -12,14 +12,16 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.*;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class MinioIntegrationTest {
   private MinioClient minioClient;
+  private CustomMinioClient customMinioClient;
   private static final String BUCKET_NAME = "mybucket";
   private static final int DEFAULT_PORT = 8000;
   private static final String ENDPOINT = "http://localhost:" + DEFAULT_PORT;
@@ -40,9 +43,17 @@ public class MinioIntegrationTest {
 
   @BeforeAll
   void setup() {
+    customMinioClient =
+        new CustomMinioClient(
+            new MinioAsyncClient.Builder()
+                .endpoint(ENDPOINT)
+                .region(credential.region())
+                .credentials(credential.accessKey(), credential.secretKey())
+                .build());
     minioClient =
         MinioClient.builder()
             .endpoint(ENDPOINT)
+            .region(credential.region())
             .credentials(credential.accessKey(), credential.secretKey())
             .build();
 
@@ -192,6 +203,74 @@ public class MinioIntegrationTest {
 
     // Cleanup
     deleteDirectory(testDir);
+  }
+
+  @Test
+  void uploadMultipart() throws Exception {
+    String objectName = "multipart-test-object";
+    String bucketName = "mybucket";
+    int partSize = 5 * 1024 * 1024; // 5MB parts
+    int numParts = 3;
+    byte[] testData = new byte[partSize * numParts];
+    new Random().nextBytes(testData);
+
+    String uploadId =
+        customMinioClient.initMultiPartUpload(bucketName, "us-east-1", objectName, null, null);
+    Map<Integer, String> urls = new HashMap<>();
+    for (int i = 1; i <= numParts; i++) {
+      int finalI = i;
+      String signedUrl =
+          minioClient.getPresignedObjectUrl(
+              GetPresignedObjectUrlArgs.builder()
+                  .method(Method.PUT)
+                  .bucket(bucketName)
+                  .object(objectName)
+                  .extraQueryParams(
+                      new HashMap<String, String>() {
+                        {
+                          put("uploadId", uploadId);
+                          put("partNumber", String.valueOf(finalI));
+                        }
+                      })
+                  .expiry(5, TimeUnit.MINUTES)
+                  .build());
+      urls.put(finalI, signedUrl);
+    }
+
+    Map<Integer, String> completedParts = new HashMap<>();
+    for (int i = 1; i <= numParts; i++) {
+      // Calculate the part data
+      int start = (i - 1) * partSize;
+      int end = (i == numParts) ? testData.length : i * partSize;
+      byte[] partData = Arrays.copyOfRange(testData, start, end);
+
+      String url = urls.get(i);
+      HttpClient httpClient = HttpClient.newHttpClient();
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(url))
+              .PUT(HttpRequest.BodyPublishers.ofByteArray(partData))
+              .build();
+
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+      // Check if upload was successful
+      if (response.statusCode() == 200) {
+        String etag =
+            response
+                .headers()
+                .firstValue("ETag")
+                .orElseThrow(() -> new RuntimeException("ETag not found in response"));
+        completedParts.put(i, etag);
+      } else {
+        throw new RuntimeException("Failed to upload part " + i + ": " + response.statusCode());
+      }
+    }
+    String uploadIdNew =
+        customMinioClient.completeMultipartUpload(bucketName, "us-east-1", objectName, null, null);
+    assertNotNull(uploadIdNew);
+    assertEquals(numParts, completedParts.size());
   }
 
   private File createTestFile(String filename, String content) throws Exception {

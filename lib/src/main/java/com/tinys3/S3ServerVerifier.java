@@ -111,11 +111,6 @@ public class S3ServerVerifier {
       return false;
     }
 
-    // Sign with original canonical request
-    if (method.equals("PUT")) {
-      method = "GET";
-    }
-
     // Create canonical request without the signature
     String canonicalRequest =
         createPresignedCanonicalRequest(method, url, queryParams, signedHeaders);
