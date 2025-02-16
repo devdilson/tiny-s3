@@ -5,7 +5,6 @@ import com.tinys3.response.BucketListResult;
 import com.tinys3.response.CompleteMultipartUploadResult;
 import com.tinys3.response.InitiateMultipartUploadResult;
 import com.tinys3.response.ListAllBucketsResult;
-
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -28,8 +27,6 @@ public interface S3FileOperations {
 
   boolean bucketExists(String bucketName);
 
-  boolean bucketExists(Path bucketName);
-
   void createDirectory(Path bucketPath) throws IOException;
 
   BucketListResult getBucketListResult(HttpExchange exchange, String bucketName, Path bucketPath)
@@ -43,9 +40,9 @@ public interface S3FileOperations {
 
   boolean bucketHasFiles(Path bucketPath) throws IOException;
 
-  void getObject(HttpExchange exchange, Path objectPath) throws IOException;
+  void getObject(HttpExchange exchange, String bucketName, String key) throws IOException;
 
-  long getSize(Path objectPath) throws IOException;
+  long getSize(String objectName, String key) throws IOException;
 
-  FileTime getLastModifiedTime(Path objectPath) throws IOException;
+  FileTime getLastModifiedTime(String objectName, String key) throws IOException;
 }

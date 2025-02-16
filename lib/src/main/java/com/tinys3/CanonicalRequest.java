@@ -1,17 +1,15 @@
 package com.tinys3;
 
-import com.sun.net.httpserver.Headers;
+import static com.tinys3.S3ServerVerifier.SIGNED_HEADERS;
+import static com.tinys3.S3Utils.*;
 
+import com.sun.net.httpserver.Headers;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.Collectors;
-
-import static com.tinys3.S3ServerVerifier.SIGNED_HEADERS;
-import static com.tinys3.S3Utils.*;
-
 
 public class CanonicalRequest {
 

@@ -1,7 +1,8 @@
 package com.tinys3.response;
 
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamWriter;
+import static com.tinys3.S3Utils.LAST_MODIFIED_FORMATTER;
+import static com.tinys3.S3Utils.createXMLStreamWriter;
+
 import java.io.IOException;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
@@ -13,8 +14,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static com.tinys3.S3Utils.createXMLStreamWriter;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
 
 public record BucketListResult(
     String bucketName,
@@ -103,7 +104,7 @@ public record BucketListResult(
         xml.writeEndElement();
 
         xml.writeStartElement("LastModified");
-        xml.writeCharacters(object.lastModified().toString());
+        xml.writeCharacters(LAST_MODIFIED_FORMATTER.format(object.lastModified().toInstant()));
         xml.writeEndElement();
 
         xml.writeEndElement();

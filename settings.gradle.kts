@@ -1,7 +1,27 @@
+import java.util.Locale
+
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+    }
+}
+
 plugins {
-    // Apply the foojay-resolver plugin to allow automatic download of JDKs
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+    id("com.diffplug.spotless") version "6.24.0" apply false
 }
 
 rootProject.name = "tiny-s3"
+
 include("lib")
+
+
+rootProject.children.forEach {
+        subProject ->
+    subProject.name = (rootProject.name + "-" + subProject.name).lowercase(Locale.getDefault())
+}

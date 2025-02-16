@@ -2,12 +2,6 @@ package com.tinys3;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.tinys3.auth.Credentials;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import javax.xml.stream.XMLOutputFactory;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamWriter;
 import java.io.*;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -18,9 +12,19 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import javax.xml.stream.XMLOutputFactory;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
 
 public class S3Utils {
+
+  public static final DateTimeFormatter LAST_MODIFIED_FORMATTER =
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC);
 
   public static byte[] hmacSHA256(byte[] key, String data)
       throws NoSuchAlgorithmException, InvalidKeyException {
@@ -47,20 +51,23 @@ public class S3Utils {
     return result.toString();
   }
 
-  static String createStringToSign(String canonicalRequest, String amzDate, Credentials credentials) {
-    StringBuilder stringToSign = new StringBuilder();
-    stringToSign.append("AWS4-HMAC-SHA256\n");
-    stringToSign.append(amzDate).append('\n');
-    stringToSign.append(getCredentialScope(amzDate, credentials)).append('\n');
-    stringToSign.append(calculateSHA256Hash(canonicalRequest));
-    return stringToSign.toString();
+  static String createStringToSign(
+      String canonicalRequest, String amzDate, Credentials credentials) {
+    return "AWS4-HMAC-SHA256\n"
+        + amzDate
+        + '\n'
+        + getCredentialScope(amzDate, credentials)
+        + '\n'
+        + calculateSHA256Hash(canonicalRequest);
   }
 
   public static String getCredentialScope(String timestamp, Credentials credentials) {
-    return String.format("%s/%s/s3/aws4_request", timestamp.substring(0, 8), credentials.getRegion());
+    return String.format(
+        "%s/%s/s3/aws4_request", timestamp.substring(0, 8), credentials.getRegion());
   }
 
-  public static String calculateSignature(String stringToSign, String timestamp, Credentials credentials)
+  public static String calculateSignature(
+      String stringToSign, String timestamp, Credentials credentials)
       throws NoSuchAlgorithmException, InvalidKeyException {
     byte[] kSecret = ("AWS4" + credentials.getSecretKey()).getBytes(StandardCharsets.UTF_8);
     byte[] kDate = hmacSHA256(kSecret, timestamp.substring(0, 8));
@@ -102,10 +109,16 @@ public class S3Utils {
       HttpExchange exchange, int code, String response, String contentType) throws IOException {
     byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
     exchange.getResponseHeaders().set("Content-Type", contentType);
-    exchange.sendResponseHeaders(code, responseBytes.length);
-    try (OutputStream os = exchange.getResponseBody()) {
-      os.write(responseBytes);
-      os.flush();
+    if ("HEAD".equals(exchange.getRequestMethod())) {
+      // For HEAD requests, we send the content length but no body
+      exchange.sendResponseHeaders(code, -1);
+    } else {
+      // For all other requests, send both headers and body
+      exchange.sendResponseHeaders(code, responseBytes.length);
+      try (OutputStream os = exchange.getResponseBody()) {
+        os.write(responseBytes);
+        os.flush();
+      }
     }
   }
 

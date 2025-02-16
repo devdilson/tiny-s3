@@ -1,21 +1,17 @@
 package com.tinys3.response;
 
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamWriter;
+import static com.tinys3.S3Utils.*;
+
+import com.tinys3.DefaultS3FileOperations;
 import java.io.IOException;
 import java.io.StringWriter;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
+import java.nio.file.attribute.FileTime;
 import java.util.List;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
 
-import static com.tinys3.S3Utils.calculateETag;
-import static com.tinys3.S3Utils.createXMLStreamWriter;
-
-public record CopyObjectResult(Path destObjectPath) {
-  private static final DateTimeFormatter LAST_MODIFIED_FORMATTER =
-      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC);
+public record CopyObjectResult(
+    String bucketName, String bucketKey, DefaultS3FileOperations s3Operations) {
 
   public String toXML() {
     StringWriter writer = new StringWriter();
@@ -25,13 +21,14 @@ public record CopyObjectResult(Path destObjectPath) {
       xml.writeStartElement("CopyObjectResult");
 
       xml.writeStartElement("LastModified");
-      String lastModified =
-          LAST_MODIFIED_FORMATTER.format(Files.getLastModifiedTime(destObjectPath).toInstant());
+      FileTime lastModifiedTime = s3Operations.getLastModifiedTime(bucketName, bucketKey);
+      String lastModified = LAST_MODIFIED_FORMATTER.format(lastModifiedTime.toInstant());
       xml.writeCharacters(lastModified);
       xml.writeEndElement();
 
       xml.writeStartElement("ETag");
-      xml.writeCharacters("\"" + calculateETag(destObjectPath, false, List.of()) + "\"");
+      xml.writeCharacters(
+          "\"" + s3Operations.calculateETag(bucketName, bucketKey, false, List.of()) + "\"");
       xml.writeEndElement();
 
       xml.writeEndElement();

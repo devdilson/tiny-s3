@@ -1,7 +1,7 @@
 package com.tinys3.response;
 
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamWriter;
+import static com.tinys3.S3Utils.createXMLStreamWriter;
+
 import java.io.IOException;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
@@ -10,8 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import static com.tinys3.S3Utils.createXMLStreamWriter;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
 
 public record ListAllBucketsResult(List<BucketInfo> buckets) {
   public record BucketInfo(String name, FileTime creationTime) {

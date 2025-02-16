@@ -1,16 +1,15 @@
 package com.tinys3.auth;
 
+import static com.tinys3.S3Utils.parseQueryString;
+
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.tinys3.S3ServerVerifier;
-
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import static com.tinys3.S3Utils.parseQueryString;
 
 public class DefaultAuthenticator implements S3Authenticator {
 
@@ -59,8 +58,7 @@ public class DefaultAuthenticator implements S3Authenticator {
         requestURL = "http://" + host + requestURL;
       }
 
-      var verifier =
-          new S3ServerVerifier(credentials.get(accessKey));
+      var verifier = new S3ServerVerifier(credentials.get(accessKey));
       return verifier.verifyRequest(
           requestURL, exchange.getRequestMethod(), headerMap, dateHeader, authHeader, payload);
 

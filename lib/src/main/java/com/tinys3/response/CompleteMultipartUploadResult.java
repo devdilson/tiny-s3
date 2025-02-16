@@ -1,13 +1,13 @@
 package com.tinys3.response;
 
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamWriter;
+import static com.tinys3.S3Utils.calculateETag;
+import static com.tinys3.S3Utils.createXMLStreamWriter;
+
 import java.io.StringWriter;
 import java.nio.file.Path;
 import java.util.List;
-
-import static com.tinys3.S3Utils.calculateETag;
-import static com.tinys3.S3Utils.createXMLStreamWriter;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
 
 public record CompleteMultipartUploadResult(
     String bucketName, String key, long size, String eTag, Path finalPath, List<String> eTags) {

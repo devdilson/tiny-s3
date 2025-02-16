@@ -1,10 +1,10 @@
 package com.tinys3.response;
 
+import static com.tinys3.S3Utils.createXMLStreamWriter;
+
+import java.io.StringWriter;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
-import java.io.StringWriter;
-
-import static com.tinys3.S3Utils.createXMLStreamWriter;
 
 public record InitiateMultipartUploadResult(String bucketName, String key, String uploadId) {
   public String toXML() {
