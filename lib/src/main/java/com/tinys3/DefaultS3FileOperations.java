@@ -102,6 +102,10 @@ public class DefaultS3FileOperations implements S3FileOperations {
     return fileOps.exists(getObjectPath(bucketName, ""));
   }
 
+  private String getObjectPath(String bucketName, String key) {
+    return fileOps.getObjectPath(bucketName, key);
+  }
+
   @Override
   public void createDirectory(String bucketName) throws StorageException {
     fileOps.createDirectory(getObjectPath(bucketName, ""));
@@ -255,11 +259,6 @@ public class DefaultS3FileOperations implements S3FileOperations {
     } catch (Exception e) {
       return "\"dummy-etag\"";
     }
-  }
-
-  @Override
-  public String getObjectPath(String bucketName, String key) {
-    return fileOps.getObjectPath(bucketName, key);
   }
 
   @Override

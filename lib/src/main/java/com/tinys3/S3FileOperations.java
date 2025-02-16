@@ -48,8 +48,6 @@ public interface S3FileOperations {
 
   String calculateETag(String bucketName, String key, boolean isMultipart, List<String> partETags);
 
-  String getObjectPath(String bucketName, String key);
-
   void copyObject(String sourceBucketName, String sourceKey, String destBucketName, String destKey)
       throws StorageException;
 }
