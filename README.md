@@ -1,22 +1,81 @@
+# TinyS3
 
-export AWS_ACCESS_KEY_ID=12345
-export AWS_SECRET_ACCESS_KEY=12345
+A lightweight S3-compatible server implementation in Java.
 
+## Features
 
-aws s3 ls --endpoint-url http://localhost:8000 s3://mybucket/  --debug
+- S3 API compatibility (core operations)
+- AWS v4 signature authentication
+- Presigned URL support
+- Multi-user credentials
+- MinIO client compatibility
 
-rclone ls test123:/mybucket   
+## Supported Operations
 
-rclone link test123:/mybucket/README.md --expire 1h --log-level DEBUG
+### Bucket Operations
+- List all buckets (GET /)
+- Create bucket (PUT /bucket)
+- Delete bucket (DELETE /bucket)
+- List objects in bucket (GET /bucket)
+- Head bucket (HEAD /bucket)
 
+### Object Operations
+- Put object (PUT /bucket/key)
+- Get object (GET /bucket/key)
+- Delete object (DELETE /bucket/key)
+- Copy object (PUT /bucket/key with x-amz-copy-source header)
+- Head object (HEAD /bucket/key)
 
-aws s3 presign s3://mybucket/README.md \
---endpoint-url http://localhost:8000 \
---expires-in 3600
+### Multipart Upload
+- Initiate multipart upload (POST /bucket/key?uploads)
+- Upload part (PUT /bucket/key?uploadId=xxx&partNumber=n)
+- Complete multipart upload (POST /bucket/key?uploadId=xxx)
+- Abort multipart upload (DELETE /bucket/key?uploadId=xxx)
 
+### Presigned URLs
+- Generate presigned URL (POST /?presigned-url)
 
+## Quick Start
 
-aws s3 cp README.md s3://mybucket/ --endpoint-url http://localhost:8000 --debug
+```java
+// Start server with credentials
+Map<String, Credentials> creds = Map.of(
+    "access-key", new Credentials("access-key", "secret-key", "us-east-1")
+);
+HttpServer server = S3Server.getHttpServer(8000, creds);
+server.start();
+```
 
+## Testing
 
-aws s3 cp ./TypeScript-Client s3://mybucket/myfolder --endpoint-url http://localhost:8000 --debug --recursive
+Run integration tests:
+```bash
+./gradlew test
+```
+
+## Unimplemented Features
+
+### Bucket Operations
+- Bucket versioning
+- Bucket lifecycle configuration
+- Bucket replication
+- Bucket policies and ACLs
+- Bucket CORS configuration
+- Bucket encryption configuration
+
+### Object Operations
+- Object versioning
+- Object ACLs and permissions
+- Object tagging
+- Object retention and legal holds
+- Server-side encryption (SSE)
+- Object locks
+- Batch operations
+- Range-based object retrieval
+
+## License
+
+GNU Affero General Public License version 3 (AGPL v3)
+TinyS3 is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+You should have received a copy of the GNU Affero General Public License along with this program. If not, see https://www.gnu.org/licenses/agpl-3.0.html.
