@@ -46,35 +46,4 @@ public interface FileOperations {
   String getObjectPath(String bucketName, String key);
 
   FileEntry[] listBuckets() throws StorageException;
-
-  /** Represents a file or directory entry */
-  public class FileEntry {
-    private final String path;
-    private final boolean isDirectory;
-    private final long size;
-    private final long lastModified;
-
-    public FileEntry(String path, boolean isDirectory, long size, long lastModified) {
-      this.path = path;
-      this.isDirectory = isDirectory;
-      this.size = size;
-      this.lastModified = lastModified;
-    }
-
-    public String getPath() {
-      return path;
-    }
-
-    public boolean isDirectory() {
-      return isDirectory;
-    }
-
-    public long getSize() {
-      return size;
-    }
-
-    public long getLastModified() {
-      return lastModified;
-    }
-  }
 }

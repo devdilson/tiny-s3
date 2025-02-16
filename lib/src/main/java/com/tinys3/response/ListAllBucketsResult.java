@@ -3,7 +3,7 @@ package com.tinys3.response;
 import static com.tinys3.S3Utils.LAST_MODIFIED_FORMATTER;
 import static com.tinys3.S3Utils.createXMLStreamWriter;
 
-import com.tinys3.io.FileOperations;
+import com.tinys3.io.FileEntry;
 import java.io.StringWriter;
 import java.nio.file.attribute.FileTime;
 import java.util.Arrays;
@@ -59,14 +59,13 @@ public record ListAllBucketsResult(List<BucketInfo> buckets) {
     }
   }
 
-  public static ListAllBucketsResult fromBuckets(
-      FileOperations.FileEntry[] buckets, String accessKey) {
+  public static ListAllBucketsResult fromBuckets(FileEntry[] buckets, String accessKey) {
     List<BucketInfo> bucketInfos =
         Arrays.stream(buckets).toList().stream()
             .map(
                 bucket ->
                     new BucketInfo(
-                        bucket.getPath(), FileTime.fromMillis(bucket.getLastModified()), accessKey))
+                        bucket.path(), FileTime.fromMillis(bucket.lastModified()), accessKey))
             .collect(Collectors.toList());
     return new ListAllBucketsResult(bucketInfos);
   }

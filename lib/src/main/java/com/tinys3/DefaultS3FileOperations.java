@@ -3,6 +3,7 @@ package com.tinys3;
 import static com.tinys3.S3Utils.parseQueryString;
 
 import com.tinys3.http.S3HttpExchange;
+import com.tinys3.io.FileEntry;
 import com.tinys3.io.FileOperations;
 import com.tinys3.io.StorageException;
 import com.tinys3.response.*;
@@ -32,7 +33,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
   @Override
   public ListAllBucketsResult getListAllBucketsResult(String accessKey) throws StorageException {
-    FileOperations.FileEntry[] buckets = fileOps.listBuckets();
+    FileEntry[] buckets = fileOps.listBuckets();
     return ListAllBucketsResult.fromBuckets(buckets, accessKey);
   }
 
@@ -116,18 +117,18 @@ public class DefaultS3FileOperations implements S3FileOperations {
     int maxKeys = Integer.parseInt(queryParams.getOrDefault("max-keys", "1000"));
     String continuationToken = queryParams.get(isV2 ? "continuation-token" : "marker");
 
-    FileOperations.FileEntry[] allEntries = fileOps.list(bucketName);
-    List<FileOperations.FileEntry> allObjects =
+    FileEntry[] allEntries = fileOps.list(bucketName);
+    List<FileEntry> allObjects =
         Arrays.stream(allEntries)
             .filter(entry -> !entry.isDirectory())
-            .filter(entry -> entry.getPath().startsWith(prefix)) // TODO: FIX PREFIX
-            .sorted(Comparator.comparing(FileOperations.FileEntry::getPath))
+            .filter(entry -> entry.path().startsWith(prefix)) // TODO: FIX PREFIX
+            .sorted(Comparator.comparing(FileEntry::path))
             .toList();
 
     int startIndex = 0;
     if (continuationToken != null) {
       for (int i = 0; i < allObjects.size(); i++) {
-        if (allObjects.get(i).getPath().compareTo(continuationToken) > 0) {
+        if (allObjects.get(i).path().compareTo(continuationToken) > 0) {
           startIndex = i;
           break;
         }
@@ -135,13 +136,13 @@ public class DefaultS3FileOperations implements S3FileOperations {
     }
 
     Set<String> commonPrefixes = new HashSet<>();
-    List<FileOperations.FileEntry> objects = new ArrayList<>();
+    List<FileEntry> objects = new ArrayList<>();
     int count = 0;
     String nextContinuationToken = null;
 
     for (int i = startIndex; i < allObjects.size() && count < maxKeys; i++) {
-      FileOperations.FileEntry object = allObjects.get(i);
-      String key = object.getPath();
+      FileEntry object = allObjects.get(i);
+      String key = object.path();
 
       if (!delimiter.isEmpty()) {
         int delimiterIndex = key.indexOf(delimiter, prefix.length());
@@ -158,7 +159,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
       count++;
 
       if (count == maxKeys && i + 1 < allObjects.size()) {
-        nextContinuationToken = allObjects.get(i + 1).getPath();
+        nextContinuationToken = allObjects.get(i + 1).path();
       }
     }
 
@@ -167,9 +168,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
             .map(
                 entry ->
                     new BucketObject(
-                        entry.getPath(),
-                        entry.getSize(),
-                        FileTime.fromMillis(entry.getLastModified())))
+                        entry.path(), entry.size(), FileTime.fromMillis(entry.lastModified())))
             .collect(Collectors.toList());
 
     return new BucketListResult.Builder()
