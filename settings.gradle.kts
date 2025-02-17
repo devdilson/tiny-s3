@@ -12,9 +12,11 @@ dependencyResolutionManagement {
     }
 }
 
+
 plugins {
     id("com.diffplug.spotless") version "6.24.0" apply false
 }
+
 
 rootProject.name = "tiny-s3"
 
