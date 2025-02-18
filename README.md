@@ -60,7 +60,7 @@ server.start();
 <dependency>
     <groupId>dev.totis</groupId>
     <artifactId>tiny-s3-lib</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
@@ -69,6 +69,12 @@ server.start();
 Run integration tests:
 ```bash
 ./gradlew test
+```
+
+## Publishing
+
+```bash
+./gradlew publishToMavenCentral --no-configuration-cache 
 ```
 
 ## Unimplemented Features

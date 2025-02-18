@@ -12,7 +12,7 @@ plugins {
 
 allprojects {
     group = "dev.totis"
-    version = "1.0.0"
+    version = "1.1.0"
 }
 
 
@@ -36,8 +36,8 @@ subprojects {
         }
     }
     java {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
         toolchain {
             languageVersion = JavaLanguageVersion.of(21)
         }
