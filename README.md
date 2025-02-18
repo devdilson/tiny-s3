@@ -54,6 +54,16 @@ S3Server server = new S3Server.Builder()
 server.start();
 ```
 
+### Maven Central
+
+```xml
+<dependency>
+    <groupId>dev.totis</groupId>
+    <artifactId>tiny-s3-lib</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
 ## Testing
 
 Run integration tests:
