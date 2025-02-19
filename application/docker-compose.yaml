@@ -1,0 +1,18 @@
+services:
+  tiny-s3:
+    image: dev.totis.tiny3
+    container_name: tiny-s3
+    environment:
+      - TINY_S3_ACCESS_KEY=12345
+      - TINY_S3_SECRET_KEY=12345
+      - TINY_S3_REGION=us-east-1
+      - TINY_S3_PORT=8000
+      - TINY_S3_STORAGE_DIR=/storage
+    ports:
+      - "8000:8000"
+    volumes:
+      - tiny_s3_data:/storage
+
+volumes:
+  tiny_s3_data:
+    name: tiny_s3_data

@@ -14,7 +14,7 @@ tasks.named<Test>("test") {
 
 jib {
     from {
-        image = "eclipse-temurin:17-jre-alpine"
+        image = "eclipse-temurin:21-jre-alpine"
     }
     to {
         image = "dev.totis.tiny3"
@@ -30,5 +30,6 @@ jib {
                 "-XX:+UseContainerSupport",
                 "-Xverify:none",
             )
+        environment = mapOf()
     }
 }
