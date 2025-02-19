@@ -34,7 +34,7 @@ public class S3Server {
   }
 
   public static class Builder {
-    private int port = 8080;
+    private int port = 8000;
     private boolean inMemory = false;
     private final Map<String, Credentials> credentialsMap = new HashMap<>();
     private String storageDir = "storage";

@@ -77,6 +77,11 @@ Run integration tests:
 ./gradlew publishToMavenCentral --no-configuration-cache 
 ```
 
+Building the docker image
+```
+./gradlew jibDockerBuild --no-configuration-cache
+```
+
 ## Unimplemented Features
 
 ### Bucket Operations

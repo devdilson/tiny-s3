@@ -89,7 +89,7 @@ public record BucketListResult(
         xml.writeStartElement("Contents");
 
         xml.writeStartElement("Key");
-        xml.writeCharacters(bucketKey);
+        xml.writeCharacters(object.path());
         xml.writeEndElement();
 
         xml.writeStartElement("Size");

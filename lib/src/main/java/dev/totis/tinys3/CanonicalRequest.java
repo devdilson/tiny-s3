@@ -13,6 +13,8 @@ import java.util.stream.Collectors;
 
 public class CanonicalRequest {
 
+  public static final String UNSIGNED_PAYLOAD = "UNSIGNED-PAYLOAD";
+
   public static String createCanonicalRequest(
       String method, String path, Map<String, String> queryParams, S3HttpHeaders headers) {
     StringBuilder canonical = new StringBuilder();
@@ -60,7 +62,7 @@ public class CanonicalRequest {
     String payloadHash =
         method.equals("GET")
             ? "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-            : calculateSHA256Hash("");
+            : "UNSIGNED-PAYLOAD";
     canonical.append(payloadHash);
 
     return canonical.toString();
@@ -134,8 +136,11 @@ public class CanonicalRequest {
       canonicalHeaders.append(headerName.toLowerCase()).append(":").append(value).append("\n");
     }
 
+    boolean isUnsignedPayload = isUnsignedPayload(headers);
     String payloadHash;
-    if (payload != null) {
+    if (isUnsignedPayload(headers)) {
+      payloadHash = UNSIGNED_PAYLOAD;
+    } else if (payload != null && payload.length > 0) {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       payloadHash = bytesToHex(digest.digest(payload));
     } else {
@@ -154,6 +159,11 @@ public class CanonicalRequest {
         + signedHeaders
         + "\n"
         + payloadHash;
+  }
+
+  private static boolean isUnsignedPayload(Map<String, String> headers) {
+    String unsignedPayload = headers.get("X-amz-content-sha256");
+    return unsignedPayload.equals(UNSIGNED_PAYLOAD);
   }
 
   private static Map<String, String> parseQueryString(String query) {

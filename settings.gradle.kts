@@ -21,6 +21,7 @@ plugins {
 rootProject.name = "tiny-s3"
 
 include("lib")
+include("application")
 
 
 rootProject.children.forEach {
