@@ -140,12 +140,10 @@ public class CanonicalRequest {
     String payloadHash;
     if (isUnsignedPayload(headers)) {
       payloadHash = UNSIGNED_PAYLOAD;
-    }
-    else if (payload != null && payload.length > 0) {
+    } else if (payload != null && payload.length > 0) {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       payloadHash = bytesToHex(digest.digest(payload));
-    }
-    else {
+    } else {
       // Use empty string hash for requests without payload
       payloadHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     }
