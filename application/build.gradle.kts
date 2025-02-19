@@ -12,6 +12,16 @@ tasks.named<Test>("test") {
     useJUnitPlatform()
 }
 
+tasks.withType<JavaExec> {
+    jvmArgs =
+        listOf(
+            "-Xms56m",
+            "-Xmx256m",
+            "-XX:+UseG1GC",
+            "-XX:+UseCompressedOops",
+        )
+}
+
 jib {
     from {
         image = "eclipse-temurin:21-jre-alpine"
