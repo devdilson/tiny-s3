@@ -27,7 +27,7 @@ jib {
         image = "eclipse-temurin:21-jre-alpine"
     }
     to {
-        image = "dev.totis.tiny3"
+        image = "tinys3/server"
         tags = setOf("latest", version.toString())
     }
     container {
