@@ -133,10 +133,28 @@ public class CanonicalRequest {
     StringBuilder canonicalHeaders = new StringBuilder();
     for (String headerName : signedHeaders.split(";")) {
       String value = headers.getOrDefault(headerName.toLowerCase(), "").trim();
+      if ("accept-encoding".equalsIgnoreCase(headerName)) {
+        // Only include if it's identity
+        if ("identity".equals(value)) {
+          canonicalHeaders
+              .append(headerName.toLowerCase())
+              .append(":")
+              .append("identity")
+              .append("\n");
+        } else if (headers.get("Cf-ray") != null && "gzip".equals(headers.get("accept-encoding"))) {
+          canonicalHeaders
+              .append(headerName.toLowerCase())
+              .append(":")
+              .append("identity")
+              .append("\n");
+        }
+        continue;
+      }
+      // handle cloudflare overriding access
+
       canonicalHeaders.append(headerName.toLowerCase()).append(":").append(value).append("\n");
     }
 
-    boolean isUnsignedPayload = isUnsignedPayload(headers);
     String payloadHash;
     if (isUnsignedPayload(headers)) {
       payloadHash = UNSIGNED_PAYLOAD;

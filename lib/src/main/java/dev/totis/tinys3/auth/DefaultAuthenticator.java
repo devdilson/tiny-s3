@@ -6,10 +6,7 @@ import dev.totis.tinys3.S3ServerVerifier;
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.http.S3HttpHeaders;
 import java.net.URI;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -110,7 +107,10 @@ public class DefaultAuthenticator implements S3Authenticator {
   private String constructRequestURL(S3HttpExchange exchange) {
     URI uri = exchange.getRequestURI();
     String host = exchange.getRequestHeaders().getFirst("Host");
-
-    return (host != null) ? String.format("http://%s%s", host, uri) : uri.toString();
+    String isHttps =
+        Objects.requireNonNullElse(
+            exchange.getRequestHeaders().getFirst("X-Forwarded-Proto"), "http");
+    String protocol = isHttps.equals("https") ? "https" : "http";
+    return (host != null) ? String.format("%s://%s%s", protocol, host, uri) : uri.toString();
   }
 }
