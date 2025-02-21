@@ -56,6 +56,12 @@ public class S3ServerVerifier {
 
     String canonicalRequest =
         createCanonicalRequest(method, requestUrl, headers, signedHeaders, payload);
+    System.out.println("==== HEADERS ====");
+    System.out.println(headers);
+    System.out.println("========================");
+    System.out.println("==== CANONICAL REQUEST: ");
+    System.out.println(canonicalRequest);
+    System.out.println("========================");
     String stringToSign =
         createStringToSign(dateHeader, credentialDate, credentialRegion, canonicalRequest);
     byte[] signingKey = getSigningKey(credentialDate);

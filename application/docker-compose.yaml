@@ -1,6 +1,6 @@
 services:
   tiny-s3:
-    image: dev.totis.tiny3
+    image: tinys3/server
     container_name: tiny-s3
     environment:
       - TINY_S3_ACCESS_KEY=12345

@@ -68,14 +68,18 @@ public class DefaultS3FileOperations implements S3FileOperations {
     parts.sort((a, b) -> Integer.compare(a.partNumber, b.partNumber));
 
     // Combine all parts into final file
-    ByteArrayOutputStream combined = new ByteArrayOutputStream();
-    for (PartInfo part : parts) {
-      byte[] partData = fileOps.readFile(part.tempPath.toString());
-      combined.write(partData, 0, partData.length);
-      fileOps.delete(part.tempPath.toString());
+    FileOutputStream combined = null;
+    try {
+      combined = new FileOutputStream(finalPath);
+      for (PartInfo part : parts) {
+        byte[] partData = fileOps.readFile(part.tempPath.toString());
+        combined.write(partData, 0, partData.length);
+        fileOps.delete(part.tempPath.toString());
+      }
+      combined.flush();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
-
-    fileOps.writeFile(finalPath, combined.toByteArray());
 
     multipartUploads.remove(uploadId);
     return new CompleteMultipartUploadResult(
@@ -218,11 +222,18 @@ public class DefaultS3FileOperations implements S3FileOperations {
       throws StorageException {
 
     String objectPath = getObjectPath(bucketName, key);
-    byte[] content = fileOps.readFile(objectPath);
-    try (OutputStream os = exchange.getResponseBody()) {
+    long contentLength = fileOps.getSize(objectPath);
+
+    try (InputStream is = fileOps.readFileStream(objectPath);
+        OutputStream os = exchange.getResponseBody()) {
       exchange.getResponseHeaders().addHeader("Content-Type", "application/octet-stream");
-      exchange.sendResponseHeaders(200, content.length);
-      os.write(content);
+      exchange.sendResponseHeaders(200, contentLength);
+
+      byte[] buffer = new byte[8192];
+      int bytesRead;
+      while ((bytesRead = is.read(buffer)) != -1) {
+        os.write(buffer, 0, bytesRead);
+      }
     } catch (IOException e) {
       throw new StorageException("Failed to write response", e);
     }
@@ -243,11 +254,22 @@ public class DefaultS3FileOperations implements S3FileOperations {
       String bucketName, String key, boolean isMultipart, List<String> partETags) {
     try {
       if (!isMultipart) {
-        byte[] content = fileOps.readFile(getObjectPath(bucketName, key));
         MessageDigest md = MessageDigest.getInstance("MD5");
-        byte[] hash = md.digest(content);
-        return "\"" + Base64.getEncoder().encodeToString(hash) + "\"";
+        String objectPath = getObjectPath(bucketName, key);
+
+        try (InputStream is = fileOps.readFileStream(objectPath)) {
+          byte[] buffer = new byte[8192]; // 8KB chunks
+          int bytesRead;
+
+          while ((bytesRead = is.read(buffer)) != -1) {
+            md.update(buffer, 0, bytesRead);
+          }
+
+          byte[] hash = md.digest();
+          return "\"" + Base64.getEncoder().encodeToString(hash) + "\"";
+        }
       } else {
+        // Multipart ETag calculation remains the same since part ETags are already computed
         MessageDigest md = MessageDigest.getInstance("MD5");
         for (String partETag : partETags) {
           String cleanPartETag = partETag.replaceAll("\"", "");
