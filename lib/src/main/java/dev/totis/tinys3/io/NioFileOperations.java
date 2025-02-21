@@ -46,11 +46,23 @@ public class NioFileOperations implements FileOperations {
   }
 
   @Override
+  public void writeFileStream(String path, InputStream inputStream) throws StorageException {}
+
+  @Override
   public byte[] readFile(String path) throws StorageException {
     try {
       return Files.readAllBytes(Paths.get(path));
     } catch (IOException e) {
       throw new StorageException("Failed to read file: " + path, e);
+    }
+  }
+
+  @Override
+  public InputStream readFileStream(String path) throws StorageException {
+    try {
+      return Files.newInputStream(Paths.get(path));
+    } catch (IOException e) {
+      throw new StorageException("Failed to create input stream for file: " + path, e);
     }
   }
 

@@ -1,5 +1,7 @@
 package dev.totis.tinys3.io;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.nio.file.attribute.FileTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,12 +58,24 @@ public class InMemoryFileOperations implements FileOperations {
   }
 
   @Override
+  public void writeFileStream(String path, InputStream inputStream) throws StorageException {}
+
+  @Override
   public byte[] readFile(String path) throws StorageException {
     FileData data = storage.get(path);
     if (data == null || data.isDirectory) {
       throw new StorageException("File not found or is a directory: " + path);
     }
     return data.content;
+  }
+
+  @Override
+  public InputStream readFileStream(String path) throws StorageException {
+    FileData data = storage.get(path);
+    if (data == null || data.isDirectory) {
+      throw new StorageException("File not found or is a directory: " + path);
+    }
+    return new ByteArrayInputStream(data.content);
   }
 
   @Override

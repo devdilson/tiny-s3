@@ -150,7 +150,8 @@ public class CanonicalRequest {
               .append("\n");
           System.out.println("Found cloudflare header");
         } else {
-          System.out.println("Header is not equal to identity " + headers.get("Cf-ray") + " " + value);
+          System.out.println(
+              "Header is not equal to identity " + headers.get("Cf-ray") + " " + value);
         }
         continue;
       }
