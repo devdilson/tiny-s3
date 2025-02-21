@@ -133,20 +133,24 @@ public class CanonicalRequest {
     StringBuilder canonicalHeaders = new StringBuilder();
     for (String headerName : signedHeaders.split(";")) {
       String value = headers.getOrDefault(headerName.toLowerCase(), "").trim();
-      if ("accept-encoding".equalsIgnoreCase(headerName)) {
+      if ("Accept-encoding".equalsIgnoreCase(headerName)) {
         // Only include if it's identity
         if ("identity".equals(value)) {
+          System.out.println("Header is equal to identity");
           canonicalHeaders
               .append(headerName.toLowerCase())
               .append(":")
               .append("identity")
               .append("\n");
-        } else if (headers.get("Cf-ray") != null && "gzip".equals(headers.get("accept-encoding"))) {
+        } else if (headers.get("Cf-ray") != null && value.contains("gzip")) {
           canonicalHeaders
               .append(headerName.toLowerCase())
               .append(":")
               .append("identity")
               .append("\n");
+          System.out.println("Found cloudflare header");
+        } else {
+          System.out.println("Header is not equal to identity " + headers.get("Cf-ray") + " " + value);
         }
         continue;
       }

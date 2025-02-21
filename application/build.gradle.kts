@@ -35,8 +35,8 @@ jib {
 
         jvmFlags =
             listOf(
-                "-Xms512m",
-                "-Xmx512m",
+                "-Xms1024m",
+                "-Xmx1024m",
                 "-XX:+UseContainerSupport",
                 "-Xverify:none",
             )
