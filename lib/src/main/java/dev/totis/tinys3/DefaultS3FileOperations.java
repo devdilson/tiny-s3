@@ -49,7 +49,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
     String tempDir = fileOps.createTempDirectory("multipart-");
     String tempFilePath = tempDir + "/part-" + partNumber;
 
-    fileOps.writeFile(tempFilePath, payload);
+    fileOps.writeTempFile(tempFilePath, payload);
 
     Path tempPath = Path.of(tempFilePath);
     String eTag = S3Utils.calculateETag(tempPath, false, List.of());
@@ -65,20 +65,15 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
     List<PartInfo> parts = multipartUploads.get(uploadId);
     List<String> eTags = parts.stream().map(e -> e.eTag).toList();
-    parts.sort((a, b) -> Integer.compare(a.partNumber, b.partNumber));
+    parts.sort(Comparator.comparingInt(a -> a.partNumber));
 
-    // Combine all parts into final file
-    FileOutputStream combined = null;
-    try {
-      combined = new FileOutputStream(finalPath);
-      for (PartInfo part : parts) {
-        byte[] partData = fileOps.readFile(part.tempPath.toString());
-        combined.write(partData, 0, partData.length);
-        fileOps.delete(part.tempPath.toString());
-      }
-      combined.flush();
-    } catch (Exception e) {
-      throw new RuntimeException(e);
+    // For now delete the existing file
+    fileOps.delete(finalPath);
+
+    for (PartInfo part : parts) {
+      byte[] partData = fileOps.readTempFile(part.tempPath.toString());
+      fileOps.appendToFile(finalPath, partData);
+      fileOps.deleteTempFile(part.tempPath.toString());
     }
 
     multipartUploads.remove(uploadId);
@@ -103,7 +98,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
   @Override
   public boolean bucketExists(String bucketName) {
-    return fileOps.exists(getObjectPath(bucketName, ""));
+    return fileOps.exists(bucketName);
   }
 
   private String getObjectPath(String bucketName, String key) {
@@ -112,7 +107,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
   @Override
   public void createDirectory(String bucketName) throws StorageException {
-    fileOps.createDirectory(getObjectPath(bucketName, ""));
+    fileOps.createDirectory(bucketName);
   }
 
   @Override

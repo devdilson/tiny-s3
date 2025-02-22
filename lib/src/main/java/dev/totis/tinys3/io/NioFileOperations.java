@@ -16,7 +16,7 @@ public class NioFileOperations implements FileOperations {
   @Override
   public void createDirectory(String path) throws StorageException {
     try {
-      Files.createDirectory(Paths.get(path));
+      Files.createDirectory(Paths.get(storagePath, path));
     } catch (IOException e) {
       throw new StorageException("Failed to create directory: " + path, e);
     }
@@ -24,20 +24,39 @@ public class NioFileOperations implements FileOperations {
 
   @Override
   public boolean exists(String path) {
-    return Files.exists(Paths.get(path));
+    return Files.exists(Paths.get(storagePath, path));
   }
 
   @Override
   public void createParentDirectories(String path) throws StorageException {
     try {
-      Files.createDirectories(Paths.get(path).getParent());
+      Files.createDirectories(Paths.get(storagePath, path).getParent());
     } catch (IOException e) {
       throw new StorageException("Failed to create parent directories: " + path, e);
     }
   }
 
   @Override
+  public void appendToFile(String path, byte[] data) throws StorageException {
+    try (var fw = new FileOutputStream(Paths.get(storagePath, path).toFile(), true)) {
+      fw.write(data);
+      fw.flush();
+    } catch (IOException e) {
+      throw new StorageException("Failed to append to file: " + path, e);
+    }
+  }
+
+  @Override
   public void writeFile(String path, byte[] data) throws StorageException {
+    try {
+      Files.write(Paths.get(storagePath, path), data);
+    } catch (IOException e) {
+      throw new StorageException("Failed to write file: " + path, e);
+    }
+  }
+
+  @Override
+  public void writeTempFile(String path, byte[] data) throws StorageException {
     try {
       Files.write(Paths.get(path), data);
     } catch (IOException e) {
@@ -51,6 +70,15 @@ public class NioFileOperations implements FileOperations {
   @Override
   public byte[] readFile(String path) throws StorageException {
     try {
+      return Files.readAllBytes(Paths.get(storagePath, path));
+    } catch (IOException e) {
+      throw new StorageException("Failed to read file: " + path, e);
+    }
+  }
+
+  @Override
+  public byte[] readTempFile(String path) throws StorageException {
+    try {
       return Files.readAllBytes(Paths.get(path));
     } catch (IOException e) {
       throw new StorageException("Failed to read file: " + path, e);
@@ -60,7 +88,7 @@ public class NioFileOperations implements FileOperations {
   @Override
   public InputStream readFileStream(String path) throws StorageException {
     try {
-      return Files.newInputStream(Paths.get(path));
+      return Files.newInputStream(Paths.get(storagePath, path));
     } catch (IOException e) {
       throw new StorageException("Failed to create input stream for file: " + path, e);
     }
@@ -69,7 +97,7 @@ public class NioFileOperations implements FileOperations {
   @Override
   public void delete(String path) throws StorageException {
     try {
-      Files.delete(Paths.get(path));
+      Files.delete(Paths.get(storagePath, path));
     } catch (IOException e) {
       throw new StorageException("Failed to delete: " + path, e);
     }
@@ -103,7 +131,7 @@ public class NioFileOperations implements FileOperations {
   @Override
   public long getSize(String path) throws StorageException {
     try {
-      return Files.size(Paths.get(path));
+      return Files.size(Paths.get(storagePath, path));
     } catch (IOException e) {
       throw new StorageException("Failed to get size: " + path, e);
     }
@@ -112,7 +140,7 @@ public class NioFileOperations implements FileOperations {
   @Override
   public FileTime getLastModifiedTime(String path) throws StorageException {
     try {
-      return Files.getLastModifiedTime(Paths.get(path));
+      return Files.getLastModifiedTime(Paths.get(storagePath, path));
     } catch (IOException e) {
       throw new StorageException("Failed to get last modified time: " + path, e);
     }
@@ -122,7 +150,9 @@ public class NioFileOperations implements FileOperations {
   public void copy(String sourcePath, String destinationPath) throws StorageException {
     try {
       Files.copy(
-          Paths.get(sourcePath), Paths.get(destinationPath), StandardCopyOption.REPLACE_EXISTING);
+          Paths.get(storagePath, sourcePath),
+          Paths.get(storagePath, destinationPath),
+          StandardCopyOption.REPLACE_EXISTING);
     } catch (IOException e) {
       throw new StorageException("Failed to copy from " + sourcePath + " to " + destinationPath, e);
     }
@@ -140,7 +170,7 @@ public class NioFileOperations implements FileOperations {
   @Override
   public boolean isDirectoryNotEmpty(String path) throws StorageException {
     try {
-      return Files.list(Paths.get(path)).findFirst().isPresent();
+      return Files.list(Paths.get(storagePath, path)).findFirst().isPresent();
     } catch (IOException e) {
       throw new StorageException("Failed to check if directory is empty: " + path, e);
     }
@@ -148,7 +178,7 @@ public class NioFileOperations implements FileOperations {
 
   @Override
   public String getObjectPath(String bucketName, String key) {
-    return storagePath + "/" + bucketName + "/" + key;
+    return bucketName + "/" + key;
   }
 
   @Override
@@ -171,6 +201,15 @@ public class NioFileOperations implements FileOperations {
           .toArray(FileEntry[]::new);
     } catch (IOException e) {
       throw new StorageException("Failed to list directory: " + storagePath, e);
+    }
+  }
+
+  @Override
+  public void deleteTempFile(String path) throws StorageException {
+    try {
+      Files.delete(Paths.get(path));
+    } catch (IOException e) {
+      throw new StorageException("Failed to delete: " + path, e);
     }
   }
 }

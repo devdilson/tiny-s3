@@ -10,7 +10,6 @@ import dev.totis.tinys3.http.S3HttpHeaders;
 import dev.totis.tinys3.io.StorageException;
 import dev.totis.tinys3.response.CopyObjectResult;
 import dev.totis.tinys3.response.PostUploadResult;
-
 import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -312,8 +311,9 @@ public class S3Handler {
     fileSystem.getObject(exchange, bucketName, key);
   }
 
-  private void handlePostObject(S3HttpExchange exchange, String bucketName, String key, byte[] payload)
-          throws IOException, StorageException {
+  private void handlePostObject(
+      S3HttpExchange exchange, String bucketName, String key, byte[] payload)
+      throws IOException, StorageException {
     // Validate bucket existence
     if (!fileSystem.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
@@ -338,8 +338,6 @@ public class S3Handler {
       sendError(exchange, 500, "InternalError");
     }
   }
-
-
 
   private void handlePutObject(
       S3HttpExchange exchange, String bucketName, String key, byte[] payload)

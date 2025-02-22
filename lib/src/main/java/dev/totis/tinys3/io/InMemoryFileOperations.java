@@ -52,10 +52,16 @@ public class InMemoryFileOperations implements FileOperations {
   }
 
   @Override
+  public void appendToFile(String path, byte[] data) throws StorageException {}
+
+  @Override
   public void writeFile(String path, byte[] data) throws StorageException {
     createParentDirectories(path);
     storage.put(path, new FileData(data, false));
   }
+
+  @Override
+  public void writeTempFile(String path, byte[] data) throws StorageException {}
 
   @Override
   public void writeFileStream(String path, InputStream inputStream) throws StorageException {}
@@ -67,6 +73,11 @@ public class InMemoryFileOperations implements FileOperations {
       throw new StorageException("File not found or is a directory: " + path);
     }
     return data.content;
+  }
+
+  @Override
+  public byte[] readTempFile(String path) throws StorageException {
+    return new byte[0];
   }
 
   @Override
@@ -198,6 +209,9 @@ public class InMemoryFileOperations implements FileOperations {
             })
         .toArray(FileEntry[]::new);
   }
+
+  @Override
+  public void deleteTempFile(String string) throws StorageException {}
 
   private String getParentPath(String path) {
     int lastSlash = path.lastIndexOf('/');

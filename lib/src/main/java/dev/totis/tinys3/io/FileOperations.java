@@ -10,11 +10,17 @@ public interface FileOperations {
 
   void createParentDirectories(String path) throws StorageException;
 
+  void appendToFile(String path, byte[] data) throws StorageException;
+
   void writeFile(String path, byte[] data) throws StorageException;
+
+  void writeTempFile(String path, byte[] data) throws StorageException;
 
   void writeFileStream(String path, InputStream inputStream) throws StorageException;
 
   byte[] readFile(String path) throws StorageException;
+
+  byte[] readTempFile(String path) throws StorageException;
 
   InputStream readFileStream(String path) throws StorageException;
 
@@ -35,4 +41,6 @@ public interface FileOperations {
   String getObjectPath(String bucketName, String key);
 
   FileEntry[] listBuckets() throws StorageException;
+
+  void deleteTempFile(String string) throws StorageException;
 }
