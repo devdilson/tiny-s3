@@ -1,6 +1,6 @@
 # TinyS3
 
-A lightweight no-dependencies S3-compatible server implementation in Java.
+A lightweight S3-compatible server implementation in Java creating for learning s3 protocol.
 
 ## Features
 
@@ -52,6 +52,22 @@ S3Server server = new S3Server.Builder()
         .build();
 
 server.start();
+```
+
+### Docker
+
+```
+docker run -d \                                                                   
+  --name tiny-s3 \
+  -e TINY_S3_ACCESS_KEY=12345 \
+  -e TINY_S3_SECRET_KEY=12345 \
+  -e TINY_S3_REGION=us-east-1 \
+  -e TINY_S3_PORT=8000 \
+  -e TINY_S3_HOST=localhost:8000 \
+  -e TINY_S3_STORAGE_DIR=/storage \
+  -p 8000:8000 \
+  -v tiny_s3_data:/storage \
+  tinys3/server
 ```
 
 ### Maven Central

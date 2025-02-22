@@ -34,11 +34,17 @@ public class S3Server {
   }
 
   public static class Builder {
+    private String host;
     private int port = 8000;
     private boolean inMemory = false;
     private final Map<String, Credentials> credentialsMap = new HashMap<>();
     private String storageDir = "storage";
     private ExecutorService customExecutor = null;
+
+    public Builder withHost(String host) {
+      this.host = host;
+      return this;
+    }
 
     public Builder withPort(int port) {
       this.port = port;
@@ -81,7 +87,8 @@ public class S3Server {
                 inMemory ? new InMemoryFileOperations() : new NioFileOperations(storageDir));
 
         var handler =
-            new S3Handler(credentialsMap, new DefaultAuthenticator(credentialsMap), fileOperations);
+            new S3Handler(
+                host, credentialsMap, new DefaultAuthenticator(credentialsMap), fileOperations);
 
         S3HttpServerAdapter adapter = () -> (e) -> handler.handle(new HttpExchangeAdapter(e));
 
@@ -92,15 +99,5 @@ public class S3Server {
         throw new RuntimeException("Failed to initialize server", e);
       }
     }
-  }
-
-  public static void main(String[] args) {
-    Credentials credential = new Credentials("12345", "12345", "us-east-1");
-
-    S3Server server =
-        new Builder().withPort(8080).withStorageDir("storage").withCredentials(credential).build();
-
-    server.start();
-    System.out.println("S3 Server started on port 8080");
   }
 }

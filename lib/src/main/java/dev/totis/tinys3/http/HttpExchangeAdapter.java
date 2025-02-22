@@ -47,6 +47,10 @@ public class HttpExchangeAdapter implements S3HttpExchange {
 
   @Override
   public void sendResponseHeaders(int rCode, long responseLength) throws IOException {
+    // TODO: Fix CORS handling
+    exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+    exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "*");
+    exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "*");
     exchange.sendResponseHeaders(rCode, responseLength);
   }
 
