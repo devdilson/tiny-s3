@@ -19,9 +19,11 @@ public class Application {
 
     int port =
         Integer.parseInt(Objects.requireNonNullElse(System.getenv().get("TINY_S3_PORT"), "8000"));
+    String host = Objects.requireNonNullElse(System.getenv().get("TINY_S3_HOST"), "");
     S3Server server =
         new S3Server.Builder()
             .withPort(port)
+            .withHost(host)
             .withCredentials(new Credentials(accessKey, secretKey, region))
             .withStorageDir(storageFolder) // Local directory for storage
             .build();

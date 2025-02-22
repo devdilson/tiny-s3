@@ -70,7 +70,7 @@ public class S3ServerVerifier {
     return calculatedSignature.equals(providedSignature);
   }
 
-  private boolean isPreSignedUrl(String requestUrl) {
+  public static boolean isPreSignedUrl(String requestUrl) {
     return requestUrl.contains("X-Amz-Signature=");
   }
 

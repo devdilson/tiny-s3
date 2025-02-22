@@ -87,7 +87,7 @@ public class NioFileOperations implements FileOperations {
     try {
       Files.delete(Paths.get(storagePath, path));
     } catch (IOException e) {
-      throw new StorageException("Failed to delete: " + path, e);
+      System.out.println("Could not delete file: " + path);
     }
   }
 

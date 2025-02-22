@@ -5,6 +5,7 @@ import static dev.totis.tinys3.S3Utils.*;
 
 import dev.totis.tinys3.auth.Credentials;
 import dev.totis.tinys3.auth.S3Authenticator;
+import dev.totis.tinys3.frontend.BadFrontend;
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.http.S3HttpHeaders;
 import dev.totis.tinys3.io.StorageException;
@@ -21,11 +22,14 @@ public class S3Handler {
   private final Map<String, Credentials> credentials;
   private final S3Authenticator authenticator;
   private final S3FileOperations fileOperations;
+  private final String host;
 
   public S3Handler(
+      String host,
       Map<String, Credentials> credentials,
       S3Authenticator authenticator,
       S3FileOperations fileOperations) {
+    this.host = host;
     this.credentials = credentials;
     this.authenticator = authenticator;
     this.fileOperations = fileOperations;
@@ -34,8 +38,16 @@ public class S3Handler {
   public void handle(S3HttpExchange exchange) throws IOException {
     try {
 
-
-      if(exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
+      // Just for testing, will be removed later.
+      if (isFrontendTesting(exchange)) {
+        sendResponse(
+            exchange,
+            200,
+            BadFrontend.FRONTEND.replace("http://localhost:8000", host),
+            "text/html");
+        return;
+      }
+      if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
         sendResponse(exchange, 200, "", "");
         return;
       }
@@ -94,6 +106,14 @@ public class S3Handler {
       e.printStackTrace();
       sendError(exchange, 500, "InternalError");
     }
+  }
+
+  private static boolean isFrontendTesting(S3HttpExchange exchange) {
+    String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
+    return userAgent != null
+        && userAgent.contains("Mozilla")
+        && !exchange.getRequestHeaders().containsHeader("X-amz-date")
+        && !S3ServerVerifier.isPreSignedUrl(exchange.getRequestURI().toString());
   }
 
   private void handleMultipartUpload(
