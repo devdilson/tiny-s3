@@ -20,15 +20,15 @@ import java.util.*;
 public class S3Handler {
   private final Map<String, Credentials> credentials;
   private final S3Authenticator authenticator;
-  private final S3FileOperations fileSystem;
+  private final S3FileOperations fileOperations;
 
   public S3Handler(
       Map<String, Credentials> credentials,
       S3Authenticator authenticator,
-      S3FileOperations fileSystem) {
+      S3FileOperations fileOperations) {
     this.credentials = credentials;
     this.authenticator = authenticator;
-    this.fileSystem = fileSystem;
+    this.fileOperations = fileOperations;
   }
 
   public void handle(S3HttpExchange exchange) throws IOException {
@@ -37,8 +37,18 @@ public class S3Handler {
       if (exchange.getRequestBody() != null) {
         payload = copyPayload(exchange);
       }
+
+      String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+      if (contentType != null
+          && contentType.contains("multipart/form-data")
+          && exchange.getRequestMethod().equals("POST")) {
+        BucketUploadPostHandler policy = new BucketUploadPostHandler(authenticator, fileOperations);
+        policy.handle(exchange, payload);
+        return;
+      }
+
       if (!authenticator.authenticateRequest(exchange, payload)) {
-        sendError(exchange, 403, "InvalidAccessKeyId");
+        sendError(exchange, 403, "XAmzContentSHA256Mismatch");
         return;
       }
 
@@ -82,7 +92,7 @@ public class S3Handler {
   private void handleMultipartUpload(
       S3HttpExchange exchange, String bucketName, String key, String method) throws IOException {
     if (method.equals("POST")) {
-      var response = fileSystem.getInitiateMultipartUploadResult(bucketName, key);
+      var response = fileOperations.getInitiateMultipartUploadResult(bucketName, key);
       sendResponse(exchange, 200, response.toXML(), "application/xml");
     }
   }
@@ -98,7 +108,7 @@ public class S3Handler {
     Map<String, String> queryParams = parseQueryString(query);
     String uploadId = queryParams.get("uploadId");
 
-    if (!fileSystem.containsKey(uploadId)) {
+    if (!fileOperations.containsKey(uploadId)) {
       sendError(exchange, 404, "NoSuchUpload");
       return;
     }
@@ -113,7 +123,7 @@ public class S3Handler {
   private void handleUploadPart(
       S3HttpExchange exchange, String uploadId, Map<String, String> queryParams, byte[] payload)
       throws IOException, StorageException {
-    String eTag = fileSystem.handleUploadPart(uploadId, queryParams, payload);
+    String eTag = fileOperations.handleUploadPart(uploadId, queryParams, payload);
 
     exchange.getResponseHeaders().addHeader("ETag", "\"" + eTag + "\"");
     exchange.sendResponseHeaders(200, -1);
@@ -124,7 +134,7 @@ public class S3Handler {
       S3HttpExchange exchange, String bucketName, String key, String uploadId) throws IOException {
 
     try {
-      var result = fileSystem.getCompleteMultipartUploadResult(bucketName, key, uploadId);
+      var result = fileOperations.getCompleteMultipartUploadResult(bucketName, key, uploadId);
       sendResponse(exchange, 200, result.toXML(), "application/xml");
     } catch (Exception e) {
       sendError(exchange, 500, "InternalError");
@@ -133,14 +143,14 @@ public class S3Handler {
 
   private void handleAbortMultipartUpload(S3HttpExchange exchange, String uploadId)
       throws IOException, StorageException {
-    fileSystem.handleAbortMultipartUpload(uploadId);
+    fileOperations.handleAbortMultipartUpload(uploadId);
     exchange.sendResponseHeaders(204, -1);
     exchange.getResponseBody().close();
   }
 
   private void handleListBuckets(S3HttpExchange exchange, Credentials credentials)
       throws IOException, StorageException {
-    var result = fileSystem.getListAllBucketsResult(credentials.accessKey());
+    var result = fileOperations.getListAllBucketsResult(credentials.accessKey());
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
@@ -167,12 +177,12 @@ public class S3Handler {
   private void handleHeadObject(
       S3HttpExchange exchange, String bucketName, String objectKey, byte[] payload)
       throws IOException, StorageException {
-    if (!fileSystem.bucketExists(bucketName)) {
+    if (!fileOperations.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
     }
 
-    if (fileSystem.objectNotExists(bucketName, objectKey) && !objectKey.isEmpty()) {
+    if (fileOperations.objectNotExists(bucketName, objectKey) && !objectKey.isEmpty()) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
@@ -180,8 +190,8 @@ public class S3Handler {
     S3HttpHeaders responseHeaders = exchange.getResponseHeaders();
     responseHeaders.addHeader("Content-Type", "application/octet-stream");
     responseHeaders.addHeader(
-        "Content-Length", String.valueOf(fileSystem.getSize(bucketName, objectKey)));
-    var lastModified = fileSystem.getLastModifiedTime(bucketName, objectKey);
+        "Content-Length", String.valueOf(fileOperations.getSize(bucketName, objectKey)));
+    var lastModified = fileOperations.getLastModifiedTime(bucketName, objectKey);
     String lastModifiedStr =
         DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'")
             .withZone(ZoneOffset.UTC)
@@ -189,19 +199,20 @@ public class S3Handler {
             .format(lastModified.toInstant());
     responseHeaders.addHeader("Last-Modified", lastModifiedStr);
     responseHeaders.addHeader(
-        "ETag", "\"" + fileSystem.calculateETag(bucketName, objectKey, false, List.of()) + "\"");
+        "ETag",
+        "\"" + fileOperations.calculateETag(bucketName, objectKey, false, List.of()) + "\"");
 
     exchange.sendResponseHeaders(200, -1);
   }
 
   private void handleListObjects(S3HttpExchange exchange, String bucketName)
       throws IOException, StorageException {
-    if (!fileSystem.bucketExists(bucketName)) {
+    if (!fileOperations.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
     }
 
-    var result = fileSystem.getBucketListResult(exchange, bucketName);
+    var result = fileOperations.getBucketListResult(exchange, bucketName);
 
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
@@ -209,29 +220,29 @@ public class S3Handler {
   private void handleCreateBucket(S3HttpExchange exchange, String bucketName)
       throws IOException, StorageException {
 
-    if (fileSystem.bucketExists(bucketName)) {
+    if (fileOperations.bucketExists(bucketName)) {
       sendError(exchange, 409, "BucketAlreadyExists");
       return;
     }
 
-    fileSystem.createDirectory(bucketName);
+    fileOperations.createDirectory(bucketName);
     sendResponse(exchange, 200, "", "application/xml");
   }
 
   private void handleDeleteBucket(S3HttpExchange exchange, String bucketName)
       throws IOException, StorageException {
 
-    if (!fileSystem.bucketExists(bucketName)) {
+    if (!fileOperations.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
     }
 
-    if (fileSystem.bucketHasFiles(bucketName)) {
+    if (fileOperations.bucketHasFiles(bucketName)) {
       sendError(exchange, 409, "BucketNotEmpty");
       return;
     }
 
-    fileSystem.handleDeleteObject(bucketName, "");
+    fileOperations.handleDeleteObject(bucketName, "");
     sendResponse(exchange, 204, "", "application/xml");
   }
 
@@ -281,53 +292,53 @@ public class S3Handler {
     String sourceBucketName = sourceParts[0];
     String sourceKey = sourceParts[1];
 
-    if (fileSystem.objectNotExists(sourceBucketName, sourceKey)) {
+    if (fileOperations.objectNotExists(sourceBucketName, sourceKey)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
 
-    if (!fileSystem.bucketExists(destBucketName)) {
+    if (!fileOperations.bucketExists(destBucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
     }
 
-    fileSystem.copyObject(sourceBucketName, sourceKey, destBucketName, destKey);
+    fileOperations.copyObject(sourceBucketName, sourceKey, destBucketName, destKey);
 
-    var result = new CopyObjectResult(destBucketName, destKey, fileSystem);
+    var result = new CopyObjectResult(destBucketName, destKey, fileOperations);
     sendResponse(exchange, 200, result.toXML(), "application/xml");
   }
 
   private void handleGetObject(S3HttpExchange exchange, String bucketName, String key)
       throws IOException, StorageException {
-    if (fileSystem.objectNotExists(bucketName, key)) {
+    if (fileOperations.objectNotExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
 
-    fileSystem.getObject(exchange, bucketName, key);
+    fileOperations.getObject(exchange, bucketName, key);
   }
 
   private void handlePutObject(
       S3HttpExchange exchange, String bucketName, String key, byte[] payload)
       throws IOException, StorageException {
-    if (!fileSystem.bucketExists(bucketName)) {
+    if (!fileOperations.bucketExists(bucketName)) {
       sendError(exchange, 404, "NoSuchBucket");
       return;
     }
 
-    String eTag = fileSystem.handlePutObject(bucketName, key, payload);
+    String eTag = fileOperations.handlePutObject(bucketName, key, payload);
     exchange.getResponseHeaders().addHeader("ETag", eTag);
     sendResponse(exchange, 200, "", "application/xml");
   }
 
   private void handleDeleteObject(S3HttpExchange exchange, String bucketName, String key)
       throws IOException, StorageException {
-    if (fileSystem.objectNotExists(bucketName, key)) {
+    if (fileOperations.objectNotExists(bucketName, key)) {
       sendError(exchange, 404, "NoSuchKey");
       return;
     }
 
-    fileSystem.handleDeleteObject(bucketName, key);
+    fileOperations.handleDeleteObject(bucketName, key);
     sendResponse(exchange, 204, "", "application/xml");
   }
 

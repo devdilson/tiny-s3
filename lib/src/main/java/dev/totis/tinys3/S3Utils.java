@@ -112,7 +112,6 @@ public class S3Utils {
       // For HEAD requests, we send the content length but no body
       exchange.sendResponseHeaders(code, -1);
     } else {
-      // For all other requests, send both headers and body
       exchange.sendResponseHeaders(code, responseBytes.length);
       try (OutputStream os = exchange.getResponseBody()) {
         os.write(responseBytes);

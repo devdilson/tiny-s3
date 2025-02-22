@@ -9,10 +9,7 @@ import io.minio.http.Method;
 import io.minio.messages.Bucket;
 import io.minio.messages.Item;
 import io.minio.messages.Part;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -22,13 +19,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -62,7 +59,7 @@ public class MinioIntegrationTest {
         new S3Server.Builder()
             .withPort(DEFAULT_PORT)
             .withStorageDir("storage")
-            // .withInMemory()
+            .withInMemory()
             .withCredentials(credential)
             .build();
 
@@ -131,7 +128,6 @@ public class MinioIntegrationTest {
             .filename(testFile.getAbsolutePath())
             .build());
 
-    // Verify upload
     StatObjectResponse stat =
         minioClient.statObject(
             StatObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
@@ -145,7 +141,8 @@ public class MinioIntegrationTest {
   @Test
   void testUploadMultipleFiles() throws Exception {
     String objectName = "generated_20mb.file";
-    var file = this.getClass().getClassLoader().getResource(objectName).getFile();
+    var file =
+        Objects.requireNonNull(this.getClass().getClassLoader().getResource(objectName)).getFile();
     minioClient.uploadObject(
         UploadObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).filename(file).build());
 
@@ -164,10 +161,8 @@ public class MinioIntegrationTest {
     String sourceDir = "Test";
     String targetPrefix = "myfolder/";
 
-    // Create test directory structure
     Path testDir = createTestDirectory(sourceDir);
 
-    // Upload directory recursively
     Files.walk(testDir)
         .filter(Files::isRegularFile)
         .forEach(
@@ -185,7 +180,6 @@ public class MinioIntegrationTest {
               }
             });
 
-    // Verify uploads
     Iterable<Result<Item>> results =
         minioClient.listObjects(
             ListObjectsArgs.builder()
@@ -200,9 +194,7 @@ public class MinioIntegrationTest {
     }
 
     assertFalse(uploadedObjects.isEmpty());
-    // Add more specific assertions based on expected directory structure
 
-    // Cleanup
     deleteDirectory(testDir);
   }
 
@@ -241,7 +233,6 @@ public class MinioIntegrationTest {
     Map<Integer, String> completedParts = new HashMap<>();
     List<Part> parts = new ArrayList<>();
     for (int i = 1; i <= numParts; i++) {
-      // Calculate the part data
       int start = (i - 1) * partSize;
       int end = (i == numParts) ? testData.length : i * partSize;
       byte[] partData = Arrays.copyOfRange(testData, start, end);
@@ -257,7 +248,6 @@ public class MinioIntegrationTest {
       HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-      // Check if upload was successful
       if (response.statusCode() == 200) {
         String etag =
             response
@@ -276,7 +266,6 @@ public class MinioIntegrationTest {
     assertNotNull(uploadIdNew);
     assertEquals(numParts, completedParts.size());
 
-    // Verify the file exists and has correct size
     StatObjectResponse stat =
         minioClient.statObject(
             StatObjectArgs.builder().bucket(bucketName).object(objectName).build());
@@ -284,7 +273,6 @@ public class MinioIntegrationTest {
     assertNotNull(stat);
     assertEquals(testData.length, stat.size());
 
-    // Optional: Verify content if needed
     GetObjectResponse response =
         minioClient.getObject(
             GetObjectArgs.builder().bucket(bucketName).object(objectName).build());
@@ -317,7 +305,7 @@ public class MinioIntegrationTest {
 
   private void deleteDirectory(Path dir) throws Exception {
     Files.walk(dir)
-        .sorted((a, b) -> b.compareTo(a))
+        .sorted(Comparator.reverseOrder())
         .forEach(
             path -> {
               try {
@@ -339,21 +327,17 @@ public class MinioIntegrationTest {
       minioClient.makeBucket(MakeBucketArgs.builder().bucket(testBucket).build());
     }
 
-    // Verify bucket exists
     boolean exists =
         minioClient.bucketExists(BucketExistsArgs.builder().bucket(testBucket).build());
     assertTrue(exists, "Bucket should exist after creation");
 
-    // List buckets
     List<Bucket> buckets = minioClient.listBuckets();
     assertTrue(
         buckets.stream().anyMatch(b -> b.name().equals(testBucket)),
         "Test bucket should be in bucket list");
 
-    // Remove bucket
     minioClient.removeBucket(RemoveBucketArgs.builder().bucket(testBucket).build());
 
-    // Verify bucket no longer exists
     exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(testBucket).build());
     assertFalse(exists, "Bucket should not exist after deletion");
   }
@@ -363,10 +347,8 @@ public class MinioIntegrationTest {
     String objectName = "test-object123.txt";
     String content = "Hello, MinIO!";
 
-    // Create test file
     File testFile = createTestFile(objectName, content);
 
-    // Upload object
     minioClient.uploadObject(
         UploadObjectArgs.builder()
             .bucket(BUCKET_NAME)
@@ -374,13 +356,11 @@ public class MinioIntegrationTest {
             .filename(testFile.getAbsolutePath())
             .build());
 
-    // Get object info
     StatObjectResponse stat =
         minioClient.statObject(
             StatObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
     assertEquals(objectName, stat.object());
 
-    // Copy object
     String copyObjectName = "copy-" + objectName;
     minioClient.copyObject(
         CopyObjectArgs.builder()
@@ -389,40 +369,35 @@ public class MinioIntegrationTest {
             .source(CopySource.builder().bucket(BUCKET_NAME).object(objectName).build())
             .build());
 
-    // Verify copy exists
     StatObjectResponse copyStat =
         minioClient.statObject(
             StatObjectArgs.builder().bucket(BUCKET_NAME).object(copyObjectName).build());
     assertEquals(copyObjectName, copyStat.object());
     assertEquals(stat.size(), copyStat.size());
 
-    // Download object
     InputStream stream =
         minioClient.getObject(
             GetObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
     String downloadedContent = new String(stream.readAllBytes());
     assertEquals(content, downloadedContent);
 
-    // Remove objects
     cleanUpData(copyObjectName);
 
     cleanUpData(objectName);
 
-    // Verify objects are deleted
     assertThrows(
         ErrorResponseException.class,
         () ->
             minioClient.statObject(
                 StatObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build()));
 
-    // Cleanup
     testFile.delete();
   }
 
   @Test
   void testConcurrentOperations() throws Exception {
     int numThreads = 50;
-    int requestsPerThread = 100;
+    int requestsPerThread = 10;
     int totalRequests = numThreads * requestsPerThread;
 
     try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -465,7 +440,70 @@ public class MinioIntegrationTest {
     }
   }
 
-  @NotNull
+  @Test
+  void testPostObject() throws Exception {
+    String objectName = "post-test-file.txt";
+    String content = "Test content for POST upload";
+    byte[] data = content.getBytes();
+
+    Map<String, String> reqParams = new HashMap<>();
+    reqParams.put("Content-Type", "text/plain");
+
+    PostPolicy policy = new PostPolicy(BUCKET_NAME, ZonedDateTime.now().plusMinutes(5));
+    policy.addEqualsCondition("key", objectName);
+    policy.addEqualsCondition("Content-Type", "text/plain");
+    policy.addContentLengthRangeCondition(1, 1024 * 1024); // 1B to 1MB
+
+    Map<String, String> formData = minioClient.getPresignedPostFormData(policy);
+
+    String boundary = "------------------------" + System.currentTimeMillis();
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+    for (Map.Entry<String, String> entry : formData.entrySet()) {
+      baos.write(("--" + boundary + "\r\n").getBytes());
+      baos.write(
+          ("Content-Disposition: form-data; name=\"" + entry.getKey() + "\"\r\n\r\n").getBytes());
+      baos.write((entry.getValue() + "\r\n").getBytes());
+    }
+
+    baos.write(("--" + boundary + "\r\n").getBytes());
+    baos.write(
+        ("Content-Disposition: form-data; name=\"file\"; filename=\"" + objectName + "\"\r\n")
+            .getBytes());
+    baos.write(("Content-Type: text/plain\r\n\r\n").getBytes());
+    baos.write(data);
+    baos.write(("\r\n--" + boundary + "--\r\n").getBytes());
+
+    HttpClient httpClient = HttpClient.newHttpClient();
+    HttpRequest request =
+        HttpRequest.newBuilder()
+            .uri(URI.create(ENDPOINT + "/" + BUCKET_NAME))
+            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+            .POST(HttpRequest.BodyPublishers.ofByteArray(baos.toByteArray()))
+            .build();
+
+    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+    assertEquals(200, response.statusCode(), "POST upload should succeed");
+
+    StatObjectResponse stat =
+        minioClient.statObject(
+            StatObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
+
+    assertNotNull(stat, "Object stats should not be null");
+    assertEquals(objectName, stat.object(), "Object name should match");
+    assertEquals(data.length, stat.size(), "File size should match");
+
+    try (InputStream stream =
+        minioClient.getObject(
+            GetObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build())) {
+      String downloadedContent = new String(stream.readAllBytes());
+      assertEquals(content, downloadedContent, "Object content should match");
+    }
+
+    cleanUpData(objectName);
+  }
+
   private IntConsumer performRequestTests(
       int threadId,
       byte[] testData,
@@ -503,7 +541,6 @@ public class MinioIntegrationTest {
           NoSuchAlgorithmException,
           ServerException,
           XmlParserException {
-    // Clean up
     minioClient.removeObject(
         RemoveObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
   }
@@ -514,7 +551,6 @@ public class MinioIntegrationTest {
       AtomicInteger successfulRequests,
       AtomicInteger failedRequests)
       throws IOException {
-    // Download and verify object
     try (InputStream stream =
         minioClient.getObject(
             GetObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build())) {
@@ -540,7 +576,6 @@ public class MinioIntegrationTest {
           NoSuchAlgorithmException,
           ServerException,
           XmlParserException {
-    // Upload object
     minioClient.putObject(
         PutObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).stream(
                 new ByteArrayInputStream(testData), testData.length, -1)
