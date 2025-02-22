@@ -1,6 +1,8 @@
 # TinyS3
 
-A lightweight S3-compatible server implementation in Java creating for learning s3 protocol.
+TinyS3 is a lightweight, S3-compatible server implementation written in Java. It was created as a learning project to understand the S3 protocol. While it can be used in integration tests, it is not yet ready for production use as a s3 server.
+
+
 
 ## Features
 
