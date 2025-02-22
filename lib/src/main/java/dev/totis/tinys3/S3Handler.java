@@ -33,6 +33,13 @@ public class S3Handler {
 
   public void handle(S3HttpExchange exchange) throws IOException {
     try {
+
+
+      if(exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
+        sendResponse(exchange, 200, "", "");
+        return;
+      }
+
       byte[] payload = null;
       if (exchange.getRequestBody() != null) {
         payload = copyPayload(exchange);
