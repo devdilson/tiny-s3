@@ -65,18 +65,6 @@ public class NioFileOperations implements FileOperations {
   }
 
   @Override
-  public void writeFileStream(String path, InputStream inputStream) throws StorageException {}
-
-  @Override
-  public byte[] readFile(String path) throws StorageException {
-    try {
-      return Files.readAllBytes(Paths.get(storagePath, path));
-    } catch (IOException e) {
-      throw new StorageException("Failed to read file: " + path, e);
-    }
-  }
-
-  @Override
   public byte[] readTempFile(String path) throws StorageException {
     try {
       return Files.readAllBytes(Paths.get(path));

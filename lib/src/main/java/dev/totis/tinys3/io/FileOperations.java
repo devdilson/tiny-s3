@@ -16,10 +16,6 @@ public interface FileOperations {
 
   void writeTempFile(String path, byte[] data) throws StorageException;
 
-  void writeFileStream(String path, InputStream inputStream) throws StorageException;
-
-  byte[] readFile(String path) throws StorageException;
-
   byte[] readTempFile(String path) throws StorageException;
 
   InputStream readFileStream(String path) throws StorageException;

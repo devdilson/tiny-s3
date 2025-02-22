@@ -62,7 +62,7 @@ public class MinioIntegrationTest {
         new S3Server.Builder()
             .withPort(DEFAULT_PORT)
             .withStorageDir("storage")
-            // .withInMemory()
+            .withInMemory()
             .withCredentials(credential)
             .build();
 
@@ -131,7 +131,6 @@ public class MinioIntegrationTest {
             .filename(testFile.getAbsolutePath())
             .build());
 
-    // Verify upload
     StatObjectResponse stat =
         minioClient.statObject(
             StatObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).build());
@@ -145,7 +144,8 @@ public class MinioIntegrationTest {
   @Test
   void testUploadMultipleFiles() throws Exception {
     String objectName = "generated_20mb.file";
-    var file = this.getClass().getClassLoader().getResource(objectName).getFile();
+    var file =
+        Objects.requireNonNull(this.getClass().getClassLoader().getResource(objectName)).getFile();
     minioClient.uploadObject(
         UploadObjectArgs.builder().bucket(BUCKET_NAME).object(objectName).filename(file).build());
 
@@ -164,10 +164,8 @@ public class MinioIntegrationTest {
     String sourceDir = "Test";
     String targetPrefix = "myfolder/";
 
-    // Create test directory structure
     Path testDir = createTestDirectory(sourceDir);
 
-    // Upload directory recursively
     Files.walk(testDir)
         .filter(Files::isRegularFile)
         .forEach(
@@ -185,7 +183,6 @@ public class MinioIntegrationTest {
               }
             });
 
-    // Verify uploads
     Iterable<Result<Item>> results =
         minioClient.listObjects(
             ListObjectsArgs.builder()
@@ -200,9 +197,7 @@ public class MinioIntegrationTest {
     }
 
     assertFalse(uploadedObjects.isEmpty());
-    // Add more specific assertions based on expected directory structure
 
-    // Cleanup
     deleteDirectory(testDir);
   }
 

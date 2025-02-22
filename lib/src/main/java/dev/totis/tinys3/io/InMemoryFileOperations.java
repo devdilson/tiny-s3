@@ -5,10 +5,8 @@ import java.io.InputStream;
 import java.nio.file.attribute.FileTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 public class InMemoryFileOperations implements FileOperations {
-  private final String storagePath;
   private final Map<String, FileData> storage;
 
   private static class FileData {
@@ -23,11 +21,8 @@ public class InMemoryFileOperations implements FileOperations {
     }
   }
 
-  public InMemoryFileOperations(String storagePath) {
-    this.storagePath = storagePath;
+  public InMemoryFileOperations() {
     this.storage = new ConcurrentHashMap<>();
-    // Create root storage path as a directory
-    storage.put(storagePath, new FileData(null, true));
   }
 
   @Override
@@ -52,7 +47,19 @@ public class InMemoryFileOperations implements FileOperations {
   }
 
   @Override
-  public void appendToFile(String path, byte[] data) throws StorageException {}
+  public void appendToFile(String path, byte[] data) throws StorageException {
+    FileData fileData = storage.get(path);
+    if (fileData == null) {
+      writeFile(path, data);
+      storage.put(path, new FileData(data, false));
+      return;
+    }
+    byte[] existing = fileData.content;
+    byte[] newContent = new byte[data.length + existing.length];
+    System.arraycopy(existing, 0, newContent, 0, existing.length);
+    System.arraycopy(data, 0, newContent, existing.length, data.length);
+    storage.put(path, new FileData(newContent, fileData.isDirectory));
+  }
 
   @Override
   public void writeFile(String path, byte[] data) throws StorageException {
@@ -61,23 +68,14 @@ public class InMemoryFileOperations implements FileOperations {
   }
 
   @Override
-  public void writeTempFile(String path, byte[] data) throws StorageException {}
-
-  @Override
-  public void writeFileStream(String path, InputStream inputStream) throws StorageException {}
-
-  @Override
-  public byte[] readFile(String path) throws StorageException {
-    FileData data = storage.get(path);
-    if (data == null || data.isDirectory) {
-      throw new StorageException("File not found or is a directory: " + path);
-    }
-    return data.content;
+  public void writeTempFile(String path, byte[] data) throws StorageException {
+    writeFile(path, data);
   }
 
   @Override
-  public byte[] readTempFile(String path) throws StorageException {
-    return new byte[0];
+  public byte[] readTempFile(String path) {
+    FileData fileData = storage.get(path);
+    return fileData == null ? null : fileData.content;
   }
 
   @Override
@@ -91,16 +89,10 @@ public class InMemoryFileOperations implements FileOperations {
 
   @Override
   public void delete(String path) throws StorageException {
-    if (!exists(path)) {
-      throw new StorageException("Path does not exist: " + path);
-    }
-
     // If it's a directory, delete all children first
-    if (storage.get(path).isDirectory) {
+    if (exists(path) && storage.get(path).isDirectory) {
       List<String> children =
-          storage.keySet().stream()
-              .filter(key -> key.startsWith(path + "/"))
-              .collect(Collectors.toList());
+          storage.keySet().stream().filter(key -> key.startsWith(path + "/")).toList();
 
       if (!children.isEmpty() && isDirectoryNotEmpty(path)) {
         throw new StorageException("Directory not empty: " + path);
@@ -114,7 +106,7 @@ public class InMemoryFileOperations implements FileOperations {
 
   @Override
   public FileEntry[] list(String bucketName) throws StorageException {
-    String prefix = storagePath + "/" + bucketName + "/";
+    String prefix = bucketName + "/";
     return storage.entrySet().stream()
         .filter(entry -> entry.getKey().startsWith(prefix))
         .map(
@@ -161,7 +153,7 @@ public class InMemoryFileOperations implements FileOperations {
 
   @Override
   public String createTempDirectory(String prefix) throws StorageException {
-    String tempPath = storagePath + "/temp-" + prefix + "-" + UUID.randomUUID();
+    String tempPath = "/temp-" + prefix + "-" + UUID.randomUUID();
     createDirectory(tempPath);
     return tempPath;
   }
@@ -179,7 +171,10 @@ public class InMemoryFileOperations implements FileOperations {
 
   @Override
   public String getObjectPath(String bucketName, String key) {
-    return storagePath + "/" + bucketName + "/" + key;
+    if (key == null || key.isEmpty()) {
+      return bucketName;
+    }
+    return bucketName + "/" + key;
   }
 
   @Override
@@ -191,15 +186,10 @@ public class InMemoryFileOperations implements FileOperations {
               System.out.println(entry.getKey());
             });
     return storage.entrySet().stream()
-        .filter(
-            entry -> {
-              String path = entry.getKey();
-              return !path.equals(storagePath);
-            })
         .map(
             entry -> {
               FileData data = entry.getValue();
-              String bucketName = entry.getKey().replace(storagePath, "").replace("/", "");
+              String bucketName = entry.getKey().replace("/", "");
 
               return new FileEntry(
                   bucketName,
@@ -211,7 +201,9 @@ public class InMemoryFileOperations implements FileOperations {
   }
 
   @Override
-  public void deleteTempFile(String string) throws StorageException {}
+  public void deleteTempFile(String string) throws StorageException {
+    storage.remove(string);
+  }
 
   private String getParentPath(String path) {
     int lastSlash = path.lastIndexOf('/');

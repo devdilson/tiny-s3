@@ -78,9 +78,7 @@ public class S3Server {
 
         var fileOperations =
             new DefaultS3FileOperations(
-                inMemory
-                    ? new InMemoryFileOperations(storageDir)
-                    : new NioFileOperations(storageDir));
+                inMemory ? new InMemoryFileOperations() : new NioFileOperations(storageDir));
 
         var handler =
             new S3Handler(credentialsMap, new DefaultAuthenticator(credentialsMap), fileOperations);
