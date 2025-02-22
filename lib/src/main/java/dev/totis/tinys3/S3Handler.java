@@ -9,6 +9,8 @@ import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.http.S3HttpHeaders;
 import dev.totis.tinys3.io.StorageException;
 import dev.totis.tinys3.response.CopyObjectResult;
+import dev.totis.tinys3.response.PostUploadResult;
+
 import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -38,7 +40,7 @@ public class S3Handler {
         payload = copyPayload(exchange);
       }
       if (!authenticator.authenticateRequest(exchange, payload)) {
-        sendError(exchange, 403, "InvalidAccessKeyId");
+        sendError(exchange, 403, "XAmzContentSHA256Mismatch");
         return;
       }
 
@@ -246,6 +248,9 @@ public class S3Handler {
       case "HEAD":
         handleHeadObject(exchange, bucketName, key, payload);
         break;
+      case "POST":
+        handlePostObject(exchange, bucketName, key, payload);
+        break;
       case "PUT":
         if (exchange.getRequestHeaders().containsHeader("x-amz-copy-source")) {
           handleCopyObject(exchange, bucketName, key);
@@ -306,6 +311,35 @@ public class S3Handler {
 
     fileSystem.getObject(exchange, bucketName, key);
   }
+
+  private void handlePostObject(S3HttpExchange exchange, String bucketName, String key, byte[] payload)
+          throws IOException, StorageException {
+    // Validate bucket existence
+    if (!fileSystem.bucketExists(bucketName)) {
+      sendError(exchange, 404, "NoSuchBucket");
+      return;
+    }
+
+    if (payload == null || payload.length == 0) {
+      sendError(exchange, 400, "InvalidArgument");
+      return;
+    }
+
+    try {
+      String eTag = fileSystem.handlePutObject(bucketName, key, payload);
+
+      PostUploadResult postUploadResult = new PostUploadResult(bucketName, key, eTag);
+
+      exchange.getResponseHeaders().addHeader("ETag", "\"" + eTag + "\"");
+      sendResponse(exchange, 200, postUploadResult.toXML(), "application/xml");
+
+    } catch (Exception e) {
+      e.printStackTrace();
+      sendError(exchange, 500, "InternalError");
+    }
+  }
+
+
 
   private void handlePutObject(
       S3HttpExchange exchange, String bucketName, String key, byte[] payload)
