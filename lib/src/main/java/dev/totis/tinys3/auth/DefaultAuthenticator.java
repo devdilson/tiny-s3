@@ -59,7 +59,7 @@ public class DefaultAuthenticator implements S3Authenticator {
     String dateHeader = headers.getFirst("X-Amz-Date");
 
     // Check if this is a pre-signed URL request
-    if (isPreSignedRequest(queryParams)) {
+    if (isPreSignedRequest(exchange, queryParams)) {
       String credential = queryParams.get("X-Amz-Credential");
       return Optional.ofNullable(credential).map(c -> c.split("/")[0]);
     }
@@ -75,9 +75,12 @@ public class DefaultAuthenticator implements S3Authenticator {
     return Optional.empty();
   }
 
-  private boolean isPreSignedRequest(Map<String, String> queryParams) {
-    return queryParams.containsKey("X-Amz-Algorithm")
-        && AWS_ALGORITHM.equals(queryParams.get("X-Amz-Algorithm"));
+  private boolean isPreSignedRequest(S3HttpExchange exchange, Map<String, String> queryParams) {
+    String key = "X-Amz-Algorithm";
+    if (exchange.getRequestHeaders().containsHeader(key)) {
+      return true;
+    }
+    return AWS_ALGORITHM.equals(queryParams.get(key));
   }
 
   private boolean verifySignature(
