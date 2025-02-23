@@ -417,6 +417,7 @@
         }
     }
 
+
     async function listObjects(bucket, prefix = '', token = null) {
         try {
             showLoading();
@@ -445,17 +446,51 @@
             // Add folders (CommonPrefixes)
             allItems.push(...commonPrefixes.map(prefix => ({...prefix, isFolder: true})));
 
-            // Add files (Contents), filtering out the current prefix and folder markers
-            allItems.push(...contents
-                .filter(object => object.Key !== prefix && !object.Key.endsWith('/'))
-                .map(object => ({...object, isFolder: false})));
+            // Add files (Contents), now including empty folders (objects ending with /)
+            contents.forEach(object => {
+                // Skip the current prefix itself
+                if (object.Key === prefix) return;
 
-            // Sort all items by last modified date in descending order
+
+                // Check if it's a folder marker (ends with /)
+                if (object.Key.endsWith('/')) {
+                    // Only add if:
+                    // 1. It's not already in commonPrefixes
+                    // 2. It's not an empty folder name
+                    // 3. It's not just the current prefix
+                    const folderPath = object.Key;
+                    const folderName = folderPath.split('/').slice(-2)[0];
+
+
+                    if (!commonPrefixes.some(p => p.Prefix === folderPath) &&
+                        folderName && // Check for empty folder name
+                        folderPath !== prefix) {
+                        allItems.push({
+                            Prefix: folderPath,
+                            LastModified: object.LastModified,
+                            isFolder: true
+                        });
+                    }
+                } else {
+                    // Regular file
+                    allItems.push({...object, isFolder: false});
+                }
+            });
+
+            // Sort all items:
+            // 1. Folders first
+            // 2. Then by last modified date in descending order
             allItems.sort((a, b) => {
+                if (a.isFolder && !b.isFolder) return -1;
+                if (!a.isFolder && b.isFolder) return 1;
+
                 const dateA = a.LastModified || new Date(0);
                 const dateB = b.LastModified || new Date(0);
                 return new Date(dateB) - new Date(dateA);
             });
+
+            // Filter empty prefix
+            allItems = allItems.filter(item => item.Prefix !== "/");
 
             // Render sorted items
             allItems.forEach(item => {
@@ -465,13 +500,12 @@
             continuationToken = data.NextContinuationToken;
             isTruncated = data.IsTruncated;
 
-            // Update pagination with correct count (0 for empty bucket)
+            // Update pagination with correct count
             updatePagination(allItems.length);
             updateNavigation();
             feather.replace();
         } catch (error) {
             console.error('Error listing objects:', error);
-            // Show a user-friendly error message
             alert('Failed to list bucket contents: ' + error.message);
         } finally {
             showLoading(false);
@@ -624,26 +658,39 @@
 
         try {
             showLoading();
+            // First, list all objects with this prefix
             const objects = await listAllObjects(currentBucket, prefix);
 
-            if (objects.length > 0) {
-                const deleteParams = {
-                    Bucket: currentBucket,
-                    Delete: {
-                        Objects: objects.map(obj => ({ Key: obj.Key })),
-                        Quiet: true
-                    }
-                };
+            // Create params to delete folder and its contents
+            const deleteParams = {
+                Bucket: currentBucket,
+                Delete: {
+                    Objects: [
+                        // Always include the folder marker itself
+                        { Key: prefix }
+                    ],
+                    Quiet: true
+                }
+            };
 
-                await s3.deleteObjects(deleteParams).promise();
+            // If there are contents, add them to the deletion list
+            if (objects.length > 0) {
+                deleteParams.Delete.Objects.push(
+                    ...objects.map(obj => ({ Key: obj.Key }))
+                );
             }
 
+            // Perform the deletion
+            await s3.deleteObjects(deleteParams).promise();
+
+            // Navigate back if we're inside the deleted folder
             if (currentPrefix.startsWith(prefix)) {
                 navigateBack();
             } else {
                 listObjects(currentBucket, currentPrefix);
             }
         } catch (error) {
+            console.error('Delete folder error:', error);
             alert('Delete failed: ' + error.message);
         } finally {
             showLoading(false);

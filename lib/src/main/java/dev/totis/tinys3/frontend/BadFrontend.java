@@ -2,7 +2,7 @@ package dev.totis.tinys3.frontend;
 
 public class BadFrontend {
   public static String FRONTEND =
-          """
+      """
 <!DOCTYPE html>
 <html lang="en">
 <head>

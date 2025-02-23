@@ -154,6 +154,11 @@ public class S3Handler {
   }
 
   private void handleBucketOperation(S3Context s3Context) throws IOException, StorageException {
+    if ("delete".equals(s3Context.getQuery())) {
+      DeleteObjectsPostHandler handler = new DeleteObjectsPostHandler(fileOperations);
+      handler.handleDeleteObjects(s3Context);
+      return;
+    }
     switch (s3Context.getMethod()) {
       case "HEAD":
         handleHeadObject(s3Context);

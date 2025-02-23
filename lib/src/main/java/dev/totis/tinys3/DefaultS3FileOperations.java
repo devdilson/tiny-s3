@@ -123,8 +123,8 @@ public class DefaultS3FileOperations implements S3FileOperations {
     FileEntry[] allEntries = fileOps.list(bucketName);
     List<FileEntry> allObjects =
         Arrays.stream(allEntries)
-            .filter(entry -> !entry.isDirectory())
-            .filter(entry -> entry.path().startsWith(prefix)) // TODO: FIX PREFIX
+            // .filter(entry -> !entry.isDirectory())
+            .filter(entry -> entry.path().startsWith(prefix))
             .sorted(Comparator.comparing(FileEntry::path))
             .toList();
 
@@ -169,9 +169,11 @@ public class DefaultS3FileOperations implements S3FileOperations {
     List<BucketObject> bucketObjects =
         objects.stream()
             .map(
-                entry ->
-                    new BucketObject(
-                        entry.path(), entry.size(), FileTime.fromMillis(entry.lastModified())))
+                entry -> {
+                  String path = entry.isDirectory() ? entry.path() + "/" : entry.path();
+                  return new BucketObject(
+                      path, entry.size(), FileTime.fromMillis(entry.lastModified()));
+                })
             .collect(Collectors.toList());
 
     return new BucketListResult.Builder()
@@ -198,7 +200,11 @@ public class DefaultS3FileOperations implements S3FileOperations {
       throws StorageException {
     String objectPath = getObjectPath(bucketName, key);
     fileOps.createParentDirectories(objectPath);
-    fileOps.writeFile(objectPath, payload);
+    if (payload != null && payload.length > 0) {
+      fileOps.writeFile(objectPath, payload);
+    } else {
+      fileOps.createDirectory(objectPath);
+    }
     return calculateETag(bucketName, key, false, List.of());
   }
 

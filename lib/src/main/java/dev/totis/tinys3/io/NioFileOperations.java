@@ -104,7 +104,7 @@ public class NioFileOperations implements FileOperations {
                   return new FileEntry(
                       objectName,
                       attrs.isDirectory(),
-                      attrs.size(),
+                      attrs.isDirectory() ? 0 : attrs.size(),
                       attrs.lastModifiedTime().toMillis());
                 } catch (IOException e) {
                   throw new UncheckedIOException(e);
