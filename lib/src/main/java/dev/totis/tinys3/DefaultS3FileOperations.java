@@ -5,6 +5,7 @@ import static dev.totis.tinys3.S3Utils.parseQueryString;
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.io.FileEntry;
 import dev.totis.tinys3.io.FileOperations;
+import dev.totis.tinys3.io.PartInfo;
 import dev.totis.tinys3.io.StorageException;
 import dev.totis.tinys3.response.*;
 import java.io.*;
@@ -53,7 +54,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
     Path tempPath = Path.of(tempFilePath);
     String eTag = S3Utils.calculateETag(tempPath, false, List.of());
-    multipartUploads.get(uploadId).add(new PartInfo(partNumber, eTag, tempPath));
+    multipartUploads.get(uploadId).add(new PartInfo(partNumber, eTag, tempPath.toString()));
     return eTag;
   }
 
@@ -64,25 +65,26 @@ public class DefaultS3FileOperations implements S3FileOperations {
     fileOps.createParentDirectories(finalPath);
 
     List<PartInfo> parts = multipartUploads.get(uploadId);
-    List<String> eTags = parts.stream().map(e -> e.eTag).toList();
-    parts.sort(Comparator.comparingInt(a -> a.partNumber));
+    List<String> eTags = parts.stream().map(PartInfo::eTag).toList();
+    parts.sort(Comparator.comparingInt(PartInfo::partNumber));
 
     // For now delete the existing file
     fileOps.delete(finalPath);
 
     for (PartInfo part : parts) {
-      byte[] partData = fileOps.readTempFile(part.tempPath.toString());
+      byte[] partData = fileOps.readTempFile(part.tempPath());
       fileOps.appendToFile(finalPath, partData);
-      fileOps.deleteTempFile(part.tempPath.toString());
+      fileOps.deleteTempFile(part.tempPath());
     }
 
     multipartUploads.remove(uploadId);
+    Path objectPath = Path.of(finalPath);
     return new CompleteMultipartUploadResult(
         bucketName,
         key,
         fileOps.getSize(finalPath),
-        S3Utils.calculateETag(Path.of(finalPath), true, eTags),
-        Path.of(finalPath),
+        S3Utils.calculateETag(objectPath, true, eTags),
+        objectPath,
         eTags);
   }
 
@@ -91,7 +93,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
     List<PartInfo> parts = multipartUploads.remove(uploadId);
     if (parts != null) {
       for (PartInfo part : parts) {
-        fileOps.delete(part.tempPath.toString());
+        fileOps.delete(part.tempPath());
       }
     }
   }

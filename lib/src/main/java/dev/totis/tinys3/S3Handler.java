@@ -9,6 +9,7 @@ import dev.totis.tinys3.frontend.BadFrontend;
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.http.S3HttpHeaders;
 import dev.totis.tinys3.io.StorageException;
+import dev.totis.tinys3.logging.S3Logger;
 import dev.totis.tinys3.response.CopyObjectResult;
 import java.io.IOException;
 import java.security.InvalidKeyException;
@@ -35,11 +36,10 @@ public class S3Handler {
     this.fileOperations = fileOperations;
   }
 
-  public void handle(S3HttpExchange exchange) throws IOException {
+  public void handle(S3Context s3Context, S3HttpExchange exchange) throws IOException {
     try {
 
-      // Just for testing, will be removed later.
-      if (isFrontendTesting(exchange)) {
+      if (s3Context.isFrontendTesting()) {
         sendResponse(
             exchange,
             200,
@@ -52,21 +52,15 @@ public class S3Handler {
         return;
       }
 
-      byte[] payload = null;
-      if (exchange.getRequestBody() != null) {
-        payload = copyPayload(exchange);
-      }
 
-      String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
-      if (contentType != null
-          && contentType.contains("multipart/form-data")
-          && exchange.getRequestMethod().equals("POST")) {
+
+      if (s3Context.isPostBucketUpload()) {
         BucketUploadPostHandler policy = new BucketUploadPostHandler(authenticator, fileOperations);
-        policy.handle(exchange, payload);
+        policy.handle(exchange, s3Context.getPayload());
         return;
       }
 
-      if (!authenticator.authenticateRequest(exchange, payload)) {
+      if (!authenticator.authenticateRequest(exchange, s3Context.getPayload())) {
         sendError(exchange, 403, "XAmzContentSHA256Mismatch");
         return;
       }
@@ -75,12 +69,12 @@ public class S3Handler {
       String method = exchange.getRequestMethod();
       String query = Objects.requireNonNullElse(exchange.getRequestURI().getQuery(), "");
 
-      if (method.equals("POST") && query.contains("presigned-url")) {
+      if (s3Context.isPresignedUrlGeneration()) {
         handlePreSignedUrlGeneration(exchange);
         return;
       }
 
-      if (path.equals("/") && method.equals("GET")) {
+      if (s3Context.isListBucketsRequest()) {
         handleListBuckets(exchange, authenticator.getCredentials(exchange));
         return;
       }
@@ -93,35 +87,25 @@ public class S3Handler {
         handleMultipartUpload(exchange, bucketName, key, method);
         return;
       } else if (query.contains("uploadId")) {
-        handleMultipartOperation(exchange, bucketName, key, method, query, payload);
+        handleMultipartOperation(exchange, bucketName, key, method, query, s3Context.getPayload());
         return;
       } else if (key.isEmpty()) {
         handleBucketOperation(exchange, bucketName, method);
         return;
       }
 
-      handleObjectOperation(exchange, bucketName, key, method, payload);
+      handleObjectOperation(exchange, bucketName, key, method, s3Context.getPayload());
 
     } catch (Exception e) {
-      e.printStackTrace();
+      S3Logger.getInstance().log("Could not process request" + e);
       sendError(exchange, 500, "InternalError");
     }
   }
 
-  private static boolean isFrontendTesting(S3HttpExchange exchange) {
-    String userAgent = exchange.getRequestHeaders().getFirst("User-Agent");
-    return userAgent != null
-        && userAgent.contains("Mozilla")
-        && !exchange.getRequestHeaders().containsHeader("X-amz-date")
-        && !S3ServerVerifier.isPreSignedUrl(exchange.getRequestURI().toString());
-  }
-
   private void handleMultipartUpload(
       S3HttpExchange exchange, String bucketName, String key, String method) throws IOException {
-    if (method.equals("POST")) {
-      var response = fileOperations.getInitiateMultipartUploadResult(bucketName, key);
-      sendResponse(exchange, 200, response.toXML(), "application/xml");
-    }
+    var response = fileOperations.getInitiateMultipartUploadResult(bucketName, key);
+    sendResponse(exchange, 200, response.toXML(), "application/xml");
   }
 
   private void handleMultipartOperation(

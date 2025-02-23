@@ -71,7 +71,7 @@ public class S3ServerVerifier {
   }
 
   public static boolean isPreSignedUrl(String requestUrl) {
-    return requestUrl.contains("X-Amz-Signature=");
+    return requestUrl.contains("X-Amz-Algorithm=");
   }
 
   public boolean verifyPreSignedUrl(String requestUrl, String method) throws Exception {

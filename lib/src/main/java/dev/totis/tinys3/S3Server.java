@@ -4,8 +4,10 @@ import com.sun.net.httpserver.HttpServer;
 import dev.totis.tinys3.auth.Credentials;
 import dev.totis.tinys3.auth.DefaultAuthenticator;
 import dev.totis.tinys3.http.HttpExchangeAdapter;
+import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.io.InMemoryFileOperations;
 import dev.totis.tinys3.io.NioFileOperations;
+import dev.totis.tinys3.logging.S3Logger;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
@@ -25,10 +27,12 @@ public class S3Server {
   }
 
   public void start() {
+    S3Logger.getInstance().log("Starting S3Server");
     server.start();
   }
 
   public void stop() {
+    S3Logger.getInstance().log("Stopping S3Server");
     server.stop(0);
     executor.shutdown();
   }
@@ -90,7 +94,12 @@ public class S3Server {
             new S3Handler(
                 host, credentialsMap, new DefaultAuthenticator(credentialsMap), fileOperations);
 
-        S3HttpServerAdapter adapter = () -> (e) -> handler.handle(new HttpExchangeAdapter(e));
+        S3HttpServerAdapter adapter =
+            () ->
+                (e) -> {
+                  S3HttpExchange request = new HttpExchangeAdapter(e);
+                  handler.handle(S3Context.create(request), request);
+                };
 
         server.createContext("/", adapter.getHandler());
 
