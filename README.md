@@ -98,6 +98,7 @@ Run integration tests:
 Building the docker image
 ```
 ./gradlew jibDockerBuild --no-configuration-cache
+docker push tinys3/server
 ```
 
 ## Unimplemented Features

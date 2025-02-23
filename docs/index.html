@@ -8,9 +8,31 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.29.0/feather.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Base styles for smooth transitions */
+        * {
+            transition: all 0.2s ease-in-out;
+        }
+
         /* Prevent content from causing horizontal overflow */
         body {
             overflow-x: hidden;
+            max-width: 100vw;
+        }
+
+        /* Main content container */
+        #content {
+            max-height: 100vh;
+        }
+
+        /* Table styles */
+        .table-container {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        /* Table row hover styles */
+        tr {
+            cursor: pointer;
         }
 
         /* Ensure table cells wrap content when needed */
@@ -19,6 +41,28 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+
+        /* Smooth button transitions */
+        button {
+            transition: all 0.2s ease-in-out;
+        }
+
+        /* Smooth input transitions */
+        input {
+            transition: all 0.2s ease-in-out;
+        }
+
+        /* Sidebar transition */
+        .sidebar {
+            transition: width 0.3s ease-in-out;
+        }
+
+        /* Loading spinner animation */
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
@@ -129,7 +173,7 @@
             </div>
 
             <div class="bg-white rounded-lg shadow overflow-hidden">
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto table-container">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                         <tr>
@@ -216,7 +260,11 @@
             endpoint: endpoint,
             s3ForcePathStyle: true,
             signatureVersion: 'v4',
-            region: 'us-east-1'
+            region: 'us-east-1',
+            httpOptions: {
+                cors: false,
+                withCredentials: true
+            }
         });
 
         s3 = new AWS.S3();

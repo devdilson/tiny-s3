@@ -19,7 +19,7 @@ public class Application {
 
     int port =
         Integer.parseInt(Objects.requireNonNullElse(System.getenv().get("TINY_S3_PORT"), "8000"));
-    String baseURL = Objects.requireNonNullElse(System.getenv().get("TINY_S3_URL"), "");
+    String baseURL = Objects.requireNonNullElse(System.getenv().get("TINY_S3_BASE_URL"), "");
     S3Server server =
         new S3Server.Builder()
             .withPort(port)
