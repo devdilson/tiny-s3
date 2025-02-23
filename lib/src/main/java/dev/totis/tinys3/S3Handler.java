@@ -24,11 +24,7 @@ public class S3Handler {
   private final S3FileOperations fileOperations;
   private final String baseURL;
 
-  public S3Handler(
-      String baseURL,
-      Map<String, Credentials> credentials,
-      S3Authenticator authenticator,
-      S3FileOperations fileOperations) {
+  public S3Handler(String baseURL, S3Authenticator authenticator, S3FileOperations fileOperations) {
     this.baseURL = baseURL;
     this.authenticator = authenticator;
     this.fileOperations = fileOperations;

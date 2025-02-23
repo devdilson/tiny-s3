@@ -92,9 +92,7 @@ public class S3Server {
             new DefaultS3FileOperations(
                 inMemory ? new InMemoryFileOperations() : new NioFileOperations(storageDir));
 
-        var handler =
-            new S3Handler(
-                host, credentialsMap, new DefaultAuthenticator(credentialsMap), fileOperations);
+        var handler = new S3Handler(host, new DefaultAuthenticator(credentialsMap), fileOperations);
 
         S3HttpServerAdapter adapter =
             () ->

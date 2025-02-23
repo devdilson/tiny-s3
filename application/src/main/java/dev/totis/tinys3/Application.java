@@ -28,6 +28,5 @@ public class Application {
             .withStorageDir(storageFolder) // Local directory for storage
             .build();
     server.start();
-    System.out.println("Server started at port 8000");
   }
 }
