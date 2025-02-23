@@ -29,7 +29,7 @@ public interface S3FileOperations {
 
   void createDirectory(String bucketName) throws StorageException;
 
-  BucketListResult getBucketListResult(S3HttpExchange exchange, String bucketName)
+  BucketListResult getBucketListResult(S3Context context, String bucketName)
       throws StorageException;
 
   boolean objectNotExists(String bucketName, String key);

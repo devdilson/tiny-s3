@@ -93,7 +93,7 @@ public class S3Context {
     return requestUrl.contains("X-Amz-Algorithm=");
   }
 
-  public boolean isPresignedUrlGeneration() {
+  public boolean isPreSignedUrlGeneration() {
     return method.equals("POST") && query.contains("presigned-url");
   }
 
@@ -134,7 +134,7 @@ public class S3Context {
     return requestParams;
   }
 
-  public static Map<String, String> parseQueryString(String query) {
+  private static Map<String, String> parseQueryString(String query) {
     Map<String, String> params = new HashMap<>();
     if (query != null) {
       for (String param : query.split("&")) {

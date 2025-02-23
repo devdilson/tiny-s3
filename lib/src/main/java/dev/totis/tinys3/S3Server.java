@@ -7,7 +7,6 @@ import dev.totis.tinys3.http.HttpExchangeAdapter;
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.io.InMemoryFileOperations;
 import dev.totis.tinys3.io.NioFileOperations;
-import dev.totis.tinys3.logging.S3Logger;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
@@ -16,8 +15,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class S3Server {
+  private static final Logger logger = LoggerFactory.getLogger(S3Server.class);
   private final HttpServer server;
   private final ExecutorService executor;
 
@@ -27,12 +29,12 @@ public class S3Server {
   }
 
   public void start() {
-    S3Logger.getInstance().log("Starting S3Server");
+    logger.info("Starting server at port: {}", server.getAddress().getPort());
     server.start();
   }
 
   public void stop() {
-    S3Logger.getInstance().log("Stopping S3Server");
+    logger.info("Stopping server");
     server.stop(0);
     executor.shutdown();
   }

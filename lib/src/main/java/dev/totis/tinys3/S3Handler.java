@@ -8,24 +8,28 @@ import dev.totis.tinys3.frontend.BadFrontend;
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.http.S3HttpHeaders;
 import dev.totis.tinys3.io.StorageException;
-import dev.totis.tinys3.logging.S3Logger;
 import dev.totis.tinys3.response.CopyObjectResult;
 import java.io.IOException;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class S3Handler {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(S3Handler.class);
+
   private final S3Authenticator authenticator;
   private final S3FileOperations fileOperations;
-  private final String host;
+  private final String baseURL;
 
   public S3Handler(
-      String host,
+      String baseURL,
       Map<String, Credentials> credentials,
       S3Authenticator authenticator,
       S3FileOperations fileOperations) {
-    this.host = host;
+    this.baseURL = baseURL;
     this.authenticator = authenticator;
     this.fileOperations = fileOperations;
   }
@@ -37,7 +41,7 @@ public class S3Handler {
         sendResponse(
             exchange,
             200,
-            BadFrontend.FRONTEND.replace("http://localhost:8000", host),
+            BadFrontend.FRONTEND.replace("http://localhost:8000", baseURL),
             "text/html");
         return;
       }
@@ -61,7 +65,7 @@ public class S3Handler {
       String method = exchange.getRequestMethod();
       String query = Objects.requireNonNullElse(exchange.getRequestURI().getQuery(), "");
 
-      if (s3Context.isPresignedUrlGeneration()) {
+      if (s3Context.isPreSignedUrlGeneration()) {
         handlePreSignedUrlGeneration(s3Context);
         return;
       }
@@ -92,7 +96,7 @@ public class S3Handler {
       handleObjectOperation(s3Context, bucketName, objectKey, method, s3Context.getPayload());
 
     } catch (Exception e) {
-      S3Logger.getInstance().log("Could not process request" + e);
+      LOGGER.info("Could not process request", e);
       s3Context.sendError(500, "InternalError");
     }
   }
@@ -209,8 +213,7 @@ public class S3Handler {
       return;
     }
 
-    var result =
-        fileOperations.getBucketListResult(s3Context.getHttpExchange(), s3Context.getBucketName());
+    var result = fileOperations.getBucketListResult(s3Context, s3Context.getBucketName());
 
     s3Context.sendResponse(200, result.toXML(), "application/xml");
   }

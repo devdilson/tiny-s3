@@ -1,7 +1,5 @@
 package dev.totis.tinys3;
 
-import static dev.totis.tinys3.S3Context.parseQueryString;
-
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.io.FileEntry;
 import dev.totis.tinys3.io.FileOperations;
@@ -113,9 +111,9 @@ public class DefaultS3FileOperations implements S3FileOperations {
   }
 
   @Override
-  public BucketListResult getBucketListResult(S3HttpExchange exchange, String bucketName)
+  public BucketListResult getBucketListResult(S3Context context, String bucketName)
       throws StorageException {
-    Map<String, String> queryParams = parseQueryString(exchange.getRequestURI().getQuery());
+    Map<String, String> queryParams = context.getQueriesParams();
     boolean isV2 = "2".equals(queryParams.get("list-type"));
     String prefix = queryParams.getOrDefault("prefix", "");
     String delimiter = queryParams.getOrDefault("delimiter", "");
