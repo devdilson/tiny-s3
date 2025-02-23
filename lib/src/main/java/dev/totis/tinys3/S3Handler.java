@@ -75,6 +75,10 @@ public class S3Handler {
       String bucketName = pathParts.length > 1 ? pathParts[1] : "";
       String objectKey = pathParts.length > 2 ? pathParts[2] : "";
 
+      if (!S3Utils.isValidPath(bucketName) || !S3Utils.isValidPath(objectKey)) {
+        s3Context.sendError(400, "InvalidRequest");
+      }
+
       s3Context.setBucketName(bucketName);
       s3Context.setObjectKey(objectKey);
 

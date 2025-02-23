@@ -234,4 +234,31 @@ public class S3Utils {
     payload = bos.toByteArray();
     return payload;
   }
+
+  public static boolean isValidPath(String path) {
+    if (path == null || path.isEmpty()) {
+      return true;
+    }
+
+    // Check for path traversal sequences
+    if (path.contains("..")
+        || path.contains("./")
+        || path.contains("/.")
+        || path.startsWith("/")
+        || path.startsWith("\\")) {
+      return false;
+    }
+
+    // Check for non-printable characters
+    if (path.chars().anyMatch(ch -> Character.isISOControl((char) ch))) {
+      return false;
+    }
+
+    // Additional S3 bucket naming rules
+    if (path.contains("//") || path.contains("\\") || path.contains("?") || path.contains("*")) {
+      return false;
+    }
+
+    return true;
+  }
 }

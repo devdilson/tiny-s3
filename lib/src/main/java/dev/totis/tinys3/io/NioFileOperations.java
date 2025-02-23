@@ -84,10 +84,35 @@ public class NioFileOperations implements FileOperations {
 
   @Override
   public void delete(String path) throws StorageException {
+    if (path == null || path.isEmpty()) {
+      throw new StorageException("Path cannot be null or empty");
+    }
+
     try {
-      Files.delete(Paths.get(storagePath, path));
+      Path finalPath = Paths.get(storagePath, path).normalize();
+      if (finalPath.toFile().isDirectory()) {
+        Files.walkFileTree(
+            finalPath,
+            new SimpleFileVisitor<>() {
+              @Override
+              public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                  throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+              }
+
+              @Override
+              public FileVisitResult postVisitDirectory(Path dir, IOException exc)
+                  throws IOException {
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+              }
+            });
+      } else {
+        Files.delete(finalPath);
+      }
     } catch (IOException e) {
-      System.out.println("Could not delete file: " + path);
+      throw new StorageException("Failed to delete " + path, e);
     }
   }
 
