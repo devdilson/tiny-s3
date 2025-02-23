@@ -1,5 +1,6 @@
 package dev.totis.tinys3;
 
+import static dev.totis.tinys3.S3Context.parseQueryString;
 
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.io.FileEntry;
@@ -14,8 +15,6 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-
-import static dev.totis.tinys3.S3Context.parseQueryString;
 
 public class DefaultS3FileOperations implements S3FileOperations {
   private final FileOperations fileOps;

@@ -14,6 +14,7 @@ public class S3Context {
 
   private final Map<String, String> headers = new HashMap<>();
   private Map<String, String> queriesParams = new HashMap<>();
+  private Map<String, String> requestParams = new HashMap<>();
   private String contentType;
   private String path;
   private String method;
@@ -37,6 +38,7 @@ public class S3Context {
     s3Context.query = Objects.requireNonNullElse(exchange.getRequestURI().getQuery(), "");
     s3Context.httpExchange = exchange;
     s3Context.queriesParams = parseQueryString(s3Context.query);
+    s3Context.requestParams = parseQueryString(s3Context.query);
 
     if (exchange.getRequestBody() != null) {
       s3Context.payload = copyPayload(exchange);
@@ -84,7 +86,11 @@ public class S3Context {
     return userAgent != null
         && userAgent.contains("Mozilla")
         && !httpExchange.getRequestHeaders().containsHeader("X-amz-date")
-        && !S3ServerVerifier.isPreSignedUrl(httpExchange.getRequestURI().toString());
+        && !isPreSignedUrl(httpExchange.getRequestURI().toString());
+  }
+
+  public boolean isPreSignedUrl(String requestUrl) {
+    return requestUrl.contains("X-Amz-Algorithm=");
   }
 
   public boolean isPresignedUrlGeneration() {
@@ -122,6 +128,10 @@ public class S3Context {
 
   public void setObjectKey(String objectKey) {
     this.objectKey = objectKey;
+  }
+
+  public Map<String, String> getRequestParams() {
+    return requestParams;
   }
 
   public static Map<String, String> parseQueryString(String query) {

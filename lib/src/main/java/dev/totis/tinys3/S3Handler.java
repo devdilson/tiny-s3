@@ -16,7 +16,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class S3Handler {
-  private final Map<String, Credentials> credentials;
   private final S3Authenticator authenticator;
   private final S3FileOperations fileOperations;
   private final String host;
@@ -27,7 +26,6 @@ public class S3Handler {
       S3Authenticator authenticator,
       S3FileOperations fileOperations) {
     this.host = host;
-    this.credentials = credentials;
     this.authenticator = authenticator;
     this.fileOperations = fileOperations;
   }
@@ -54,7 +52,7 @@ public class S3Handler {
         return;
       }
 
-      if (!authenticator.authenticateRequest(exchange, s3Context.getPayload())) {
+      if (!authenticator.authenticateRequest(s3Context)) {
         s3Context.sendError(403, "XAmzContentSHA256Mismatch");
         return;
       }
@@ -64,12 +62,12 @@ public class S3Handler {
       String query = Objects.requireNonNullElse(exchange.getRequestURI().getQuery(), "");
 
       if (s3Context.isPresignedUrlGeneration()) {
-        handlePreSignedUrlGeneration(exchange);
+        handlePreSignedUrlGeneration(s3Context);
         return;
       }
 
       if (s3Context.isListBucketsRequest()) {
-        handleListBuckets(exchange, authenticator.getCredentials(exchange));
+        handleListBuckets(s3Context, authenticator.getCredentials(exchange));
         return;
       }
 
@@ -87,11 +85,11 @@ public class S3Handler {
         handleMultipartOperation(s3Context);
         return;
       } else if (objectKey.isEmpty()) {
-        handleBucketOperation(exchange, bucketName, method);
+        handleBucketOperation(s3Context);
         return;
       }
 
-      handleObjectOperation(exchange, bucketName, objectKey, method, s3Context.getPayload());
+      handleObjectOperation(s3Context, bucketName, objectKey, method, s3Context.getPayload());
 
     } catch (Exception e) {
       S3Logger.getInstance().log("Could not process request" + e);
@@ -149,46 +147,45 @@ public class S3Handler {
     s3Context.sendResponse(204, "", "application/xml");
   }
 
-  private void handleListBuckets(S3HttpExchange exchange, Credentials credentials)
+  private void handleListBuckets(S3Context s3Context, Credentials credentials)
       throws IOException, StorageException {
     var result = fileOperations.getListAllBucketsResult(credentials.accessKey());
-    sendResponse(exchange, 200, result.toXML(), "application/xml");
+    s3Context.sendResponse(200, result.toXML(), "application/xml");
   }
 
-  private void handleBucketOperation(S3HttpExchange exchange, String bucketName, String method)
-      throws IOException, StorageException {
-    switch (method) {
+  private void handleBucketOperation(S3Context s3Context) throws IOException, StorageException {
+    switch (s3Context.getMethod()) {
       case "HEAD":
-        handleHeadObject(exchange, bucketName, "", null);
+        handleHeadObject(s3Context);
         break;
       case "GET":
-        handleListObjects(exchange, bucketName);
+        handleListObjects(s3Context);
         break;
       case "PUT":
-        handleCreateBucket(exchange, bucketName);
+        handleCreateBucket(s3Context);
         break;
       case "DELETE":
-        handleDeleteBucket(exchange, bucketName);
+        handleDeleteBucket(s3Context);
         break;
       default:
-        sendError(exchange, 405, "MethodNotAllowed");
+        s3Context.sendError(405, "MethodNotAllowed");
     }
   }
 
-  private void handleHeadObject(
-      S3HttpExchange exchange, String bucketName, String objectKey, byte[] payload)
-      throws IOException, StorageException {
+  private void handleHeadObject(S3Context s3Context) throws IOException, StorageException {
+    String bucketName = s3Context.getBucketName();
+    String objectKey = s3Context.getObjectKey();
     if (!fileOperations.bucketExists(bucketName)) {
-      sendError(exchange, 404, "NoSuchBucket");
+      s3Context.sendError(404, "NoSuchBucket");
       return;
     }
 
     if (fileOperations.objectNotExists(bucketName, objectKey) && !objectKey.isEmpty()) {
-      sendError(exchange, 404, "NoSuchKey");
+      s3Context.sendError(404, "NoSuchKey");
       return;
     }
 
-    S3HttpHeaders responseHeaders = exchange.getResponseHeaders();
+    S3HttpHeaders responseHeaders = s3Context.getHttpExchange().getResponseHeaders();
     responseHeaders.addHeader("Content-Type", "application/octet-stream");
     responseHeaders.addHeader(
         "Content-Length", String.valueOf(fileOperations.getSize(bucketName, objectKey)));
@@ -203,81 +200,80 @@ public class S3Handler {
         "ETag",
         "\"" + fileOperations.calculateETag(bucketName, objectKey, false, List.of()) + "\"");
 
-    exchange.sendResponseHeaders(200, -1);
+    s3Context.sendResponse(200, "", "application/octet-stream");
   }
 
-  private void handleListObjects(S3HttpExchange exchange, String bucketName)
-      throws IOException, StorageException {
-    if (!fileOperations.bucketExists(bucketName)) {
-      sendError(exchange, 404, "NoSuchBucket");
+  private void handleListObjects(S3Context s3Context) throws IOException, StorageException {
+    if (!fileOperations.bucketExists(s3Context.getBucketName())) {
+      s3Context.sendError(404, "NoSuchBucket");
       return;
     }
 
-    var result = fileOperations.getBucketListResult(exchange, bucketName);
+    var result =
+        fileOperations.getBucketListResult(s3Context.getHttpExchange(), s3Context.getBucketName());
 
-    sendResponse(exchange, 200, result.toXML(), "application/xml");
+    s3Context.sendResponse(200, result.toXML(), "application/xml");
   }
 
-  private void handleCreateBucket(S3HttpExchange exchange, String bucketName)
-      throws IOException, StorageException {
-
+  private void handleCreateBucket(S3Context s3Context) throws IOException, StorageException {
+    String bucketName = s3Context.getBucketName();
     if (fileOperations.bucketExists(bucketName)) {
-      sendError(exchange, 409, "BucketAlreadyExists");
+      s3Context.sendError(409, "BucketAlreadyExists");
       return;
     }
 
     fileOperations.createDirectory(bucketName);
-    sendResponse(exchange, 200, "", "application/xml");
+    s3Context.sendResponse(200, "", "application/xml");
   }
 
-  private void handleDeleteBucket(S3HttpExchange exchange, String bucketName)
-      throws IOException, StorageException {
-
+  private void handleDeleteBucket(S3Context s3Context) throws IOException, StorageException {
+    String bucketName = s3Context.getBucketName();
     if (!fileOperations.bucketExists(bucketName)) {
-      sendError(exchange, 404, "NoSuchBucket");
+      s3Context.sendError(404, "NoSuchBucket");
       return;
     }
 
     if (fileOperations.bucketHasFiles(bucketName)) {
-      sendError(exchange, 409, "BucketNotEmpty");
+      s3Context.sendError(409, "BucketNotEmpty");
       return;
     }
 
     fileOperations.handleDeleteObject(bucketName, "");
-    sendResponse(exchange, 204, "", "application/xml");
+    s3Context.sendResponse(204, "", "application/xml");
   }
 
   private void handleObjectOperation(
-      S3HttpExchange exchange, String bucketName, String key, String method, byte[] payload)
+      S3Context s3Context, String bucketName, String key, String method, byte[] payload)
       throws IOException, StorageException {
 
     switch (method) {
       case "GET":
-        handleGetObject(exchange, bucketName, key);
+        handleGetObject(s3Context);
         break;
       case "HEAD":
-        handleHeadObject(exchange, bucketName, key, payload);
+        handleHeadObject(s3Context);
         break;
       case "PUT":
-        if (exchange.getRequestHeaders().containsHeader("x-amz-copy-source")) {
-          handleCopyObject(exchange, bucketName, key);
+        if (s3Context.getHttpExchange().getResponseHeaders().containsHeader("x-amz-copy-source")) {
+          handleCopyObject(s3Context, bucketName, key);
         } else {
-          handlePutObject(exchange, bucketName, key, payload);
+          handlePutObject(s3Context);
         }
         break;
       case "DELETE":
-        handleDeleteObject(exchange, bucketName, key);
+        handleDeleteObject(s3Context);
         break;
       default:
-        sendError(exchange, 405, "MethodNotAllowed");
+        s3Context.sendError(405, "MethodNotAllowed");
     }
   }
 
-  private void handleCopyObject(S3HttpExchange exchange, String destBucketName, String destKey)
+  private void handleCopyObject(S3Context s3Context, String destBucketName, String destKey)
       throws IOException, StorageException {
-    String copySource = exchange.getRequestHeaders().getFirst("x-amz-copy-source");
+    String copySource =
+        s3Context.getHttpExchange().getRequestHeaders().getFirst("x-amz-copy-source");
     if (copySource == null) {
-      sendError(exchange, 400, "MissingParameter");
+      s3Context.sendError(400, "MissingParameter");
       return;
     }
 
@@ -286,7 +282,7 @@ public class S3Handler {
     }
     String[] sourceParts = copySource.split("/", 2);
     if (sourceParts.length != 2) {
-      sendError(exchange, 400, "InvalidRequest");
+      s3Context.sendError(400, "InvalidRequest");
       return;
     }
 
@@ -294,58 +290,60 @@ public class S3Handler {
     String sourceKey = sourceParts[1];
 
     if (fileOperations.objectNotExists(sourceBucketName, sourceKey)) {
-      sendError(exchange, 404, "NoSuchKey");
+      s3Context.sendError(404, "NoSuchKey");
       return;
     }
 
     if (!fileOperations.bucketExists(destBucketName)) {
-      sendError(exchange, 404, "NoSuchBucket");
+      s3Context.sendError(404, "NoSuchBucket");
       return;
     }
 
     fileOperations.copyObject(sourceBucketName, sourceKey, destBucketName, destKey);
 
     var result = new CopyObjectResult(destBucketName, destKey, fileOperations);
-    sendResponse(exchange, 200, result.toXML(), "application/xml");
+    s3Context.sendResponse(200, result.toXML(), "application/xml");
   }
 
-  private void handleGetObject(S3HttpExchange exchange, String bucketName, String key)
-      throws IOException, StorageException {
-    if (fileOperations.objectNotExists(bucketName, key)) {
-      sendError(exchange, 404, "NoSuchKey");
+  private void handleGetObject(S3Context s3Context) throws IOException, StorageException {
+    if (fileOperations.objectNotExists(s3Context.getBucketName(), s3Context.getObjectKey())) {
+      s3Context.sendError(404, "NoSuchKey");
       return;
     }
 
-    fileOperations.getObject(exchange, bucketName, key);
+    fileOperations.getObject(
+        s3Context.getHttpExchange(), s3Context.getBucketName(), s3Context.getObjectKey());
   }
 
-  private void handlePutObject(
-      S3HttpExchange exchange, String bucketName, String key, byte[] payload)
-      throws IOException, StorageException {
+  private void handlePutObject(S3Context s3Context) throws IOException, StorageException {
+    String bucketName = s3Context.getBucketName();
+    String objectKey = s3Context.getObjectKey();
+    byte[] payload = s3Context.getPayload();
     if (!fileOperations.bucketExists(bucketName)) {
-      sendError(exchange, 404, "NoSuchBucket");
+      s3Context.sendError(404, "NoSuchBucket");
       return;
     }
 
-    String eTag = fileOperations.handlePutObject(bucketName, key, payload);
-    exchange.getResponseHeaders().addHeader("ETag", eTag);
-    sendResponse(exchange, 200, "", "application/xml");
+    String eTag = fileOperations.handlePutObject(bucketName, objectKey, payload);
+    s3Context.getHttpExchange().getResponseHeaders().addHeader("ETag", eTag);
+    s3Context.sendResponse(200, "", "application/xml");
   }
 
-  private void handleDeleteObject(S3HttpExchange exchange, String bucketName, String key)
-      throws IOException, StorageException {
-    if (fileOperations.objectNotExists(bucketName, key)) {
-      sendError(exchange, 404, "NoSuchKey");
+  private void handleDeleteObject(S3Context s3Context) throws IOException, StorageException {
+    String bucketName = s3Context.getBucketName();
+    String objectKey = s3Context.getObjectKey();
+    if (fileOperations.objectNotExists(bucketName, objectKey)) {
+      s3Context.sendError(404, "NoSuchKey");
       return;
     }
 
-    fileOperations.handleDeleteObject(bucketName, key);
-    sendResponse(exchange, 204, "", "application/xml");
+    fileOperations.handleDeleteObject(bucketName, objectKey);
+    s3Context.sendResponse(204, "", "application/xml");
   }
 
-  private void handlePreSignedUrlGeneration(S3HttpExchange exchange) throws IOException {
+  private void handlePreSignedUrlGeneration(S3Context s3Context) throws IOException {
     try {
-      Map<String, String> params = parseRequestParameters(exchange);
+      Map<String, String> params = s3Context.getRequestParams();
       String method = params.get("method");
       String path = params.get("path");
       String accessKey = params.get("accessKey");
@@ -353,10 +351,10 @@ public class S3Handler {
 
       String preSignedUrl =
           authenticator.generatePreSignedUrl(
-              method, path, accessKey, expiration, exchange.getRequestHeaders());
-      sendResponse(exchange, 200, preSignedUrl, "text/plain");
+              method, path, accessKey, expiration, s3Context.getHttpExchange().getRequestHeaders());
+      s3Context.sendResponse(200, preSignedUrl, "text/plain");
     } catch (Exception e) {
-      sendError(exchange, 400, "InvalidRequest");
+      s3Context.sendError(400, "InvalidRequest");
     }
   }
 }

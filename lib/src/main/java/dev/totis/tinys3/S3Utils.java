@@ -51,7 +51,7 @@ public class S3Utils {
     return result.toString();
   }
 
-  static String createStringToSign(
+  public static String createStringToSign(
       String canonicalRequest, String amzDate, Credentials credentials) {
     return "AWS4-HMAC-SHA256\n"
         + amzDate

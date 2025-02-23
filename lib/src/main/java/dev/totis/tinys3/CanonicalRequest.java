@@ -1,6 +1,5 @@
 package dev.totis.tinys3;
 
-import static dev.totis.tinys3.S3ServerVerifier.SIGNED_HEADERS;
 import static dev.totis.tinys3.S3Utils.*;
 
 import dev.totis.tinys3.http.S3HttpHeaders;
@@ -14,6 +13,9 @@ import java.util.stream.Collectors;
 public class CanonicalRequest {
 
   public static final String UNSIGNED_PAYLOAD = "UNSIGNED-PAYLOAD";
+
+  public static final Set<String> SIGNED_HEADERS =
+      new HashSet<>(Arrays.asList("host", "x-amz-date", "x-amz-security-token"));
 
   public static String createCanonicalRequest(
       String method, String path, Map<String, String> queryParams, S3HttpHeaders headers) {

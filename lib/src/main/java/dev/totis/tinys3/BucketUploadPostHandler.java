@@ -26,7 +26,7 @@ public class BucketUploadPostHandler {
       return;
     }
 
-    if (authenticator.authenticateRequest(s3Context.getHttpExchange(), s3Context.getPayload())) {
+    if (authenticator.authenticateRequest(s3Context)) {
       s3Context.sendResponse(403, "Invalid content type", "application/xml");
       return;
     }
@@ -50,38 +50,21 @@ public class BucketUploadPostHandler {
       }
 
       String etag =
-          fileOperations.handlePutObject(
-              bucketName, formData.getFileName(), formData.getFileData());
+          fileOperations.handlePutObject(bucketName, formData.fileName(), formData.fileData());
       s3Context.sendResponse(
           200,
-          new PostUploadResult(bucketName, formData.getFileName(), etag).toXML(),
+          new PostUploadResult(bucketName, formData.fileName(), etag).toXML(),
           "application/xml");
     } catch (Exception e) {
       s3Context.sendResponse(500, "Failed to process upload: " + e.getMessage(), "application/xml");
     }
   }
 
-  private static class MultipartFormData {
-    private final Map<String, String> formFields;
-    private final byte[] fileData;
-    private final String fileName;
-
-    private MultipartFormData(Map<String, String> formFields, byte[] fileData, String fileName) {
-      this.formFields = formFields;
-      this.fileData = fileData;
-      this.fileName = fileName;
-    }
+  private record MultipartFormData(
+      Map<String, String> formFields, byte[] fileData, String fileName) {
 
     public String getField(String name) {
       return formFields.get(name);
-    }
-
-    public byte[] getFileData() {
-      return fileData;
-    }
-
-    public String getFileName() {
-      return fileName;
     }
 
     public static MultipartFormData parse(byte[] payload, String boundary) throws IOException {
