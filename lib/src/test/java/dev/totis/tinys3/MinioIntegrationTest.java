@@ -98,7 +98,7 @@ public class MinioIntegrationTest {
   }
 
   @Test
-  void testGeneratePresignedUrl() throws Exception {
+  void testGeneratePreSignedUrl() throws Exception {
     String objectName = "README.md";
     String url =
         minioClient.getPresignedObjectUrl(

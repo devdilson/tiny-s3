@@ -19,15 +19,14 @@ public class Application {
 
     int port =
         Integer.parseInt(Objects.requireNonNullElse(System.getenv().get("TINY_S3_PORT"), "8000"));
-    String host = Objects.requireNonNullElse(System.getenv().get("TINY_S3_HOST"), "");
+    String baseURL = Objects.requireNonNullElse(System.getenv().get("TINY_S3_BASE_URL"), "");
     S3Server server =
         new S3Server.Builder()
             .withPort(port)
-            .withHost(host)
+            .withHost(baseURL)
             .withCredentials(new Credentials(accessKey, secretKey, region))
             .withStorageDir(storageFolder) // Local directory for storage
             .build();
     server.start();
-    System.out.println("Server started at port 8000");
   }
 }

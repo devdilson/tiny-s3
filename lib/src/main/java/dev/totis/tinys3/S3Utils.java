@@ -51,7 +51,7 @@ public class S3Utils {
     return result.toString();
   }
 
-  static String createStringToSign(
+  public static String createStringToSign(
       String canonicalRequest, String amzDate, Credentials credentials) {
     return "AWS4-HMAC-SHA256\n"
         + amzDate
@@ -169,19 +169,6 @@ public class S3Utils {
     return params;
   }
 
-  public static Map<String, String> parseQueryString(String query) {
-    Map<String, String> params = new HashMap<>();
-    if (query != null) {
-      for (String param : query.split("&")) {
-        String[] parts = param.split("=", 2);
-        if (parts.length == 2) {
-          params.put(parts[0], parts[1]);
-        }
-      }
-    }
-    return params;
-  }
-
   public static boolean verifyExpirationDate(String date, String expires) {
     try {
       // AWS uses ISO 8601 format: yyyyMMdd'T'HHmmss'Z'
@@ -246,5 +233,32 @@ public class S3Utils {
     }
     payload = bos.toByteArray();
     return payload;
+  }
+
+  public static boolean isValidPath(String path) {
+    if (path == null || path.isEmpty()) {
+      return true;
+    }
+
+    // Check for path traversal sequences
+    if (path.contains("..")
+        || path.contains("./")
+        || path.contains("/.")
+        || path.startsWith("/")
+        || path.startsWith("\\")) {
+      return false;
+    }
+
+    // Check for non-printable characters
+    if (path.chars().anyMatch(ch -> Character.isISOControl((char) ch))) {
+      return false;
+    }
+
+    // Additional S3 bucket naming rules
+    if (path.contains("//") || path.contains("\\") || path.contains("?") || path.contains("*")) {
+      return false;
+    }
+
+    return true;
   }
 }

@@ -7,7 +7,7 @@ services:
       - TINY_S3_SECRET_KEY=12345
       - TINY_S3_REGION=us-east-1
       - TINY_S3_PORT=8000
-      - TINY_S3_HOST=localhost:8000
+      - TINY_S3_BASE_URL=localhost:8000
       - TINY_S3_STORAGE_DIR=/storage
     ports:
       - "8000:8000"

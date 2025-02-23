@@ -1,10 +1,9 @@
 package dev.totis.tinys3;
 
-import static dev.totis.tinys3.S3Utils.parseQueryString;
-
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.io.FileEntry;
 import dev.totis.tinys3.io.FileOperations;
+import dev.totis.tinys3.io.PartInfo;
 import dev.totis.tinys3.io.StorageException;
 import dev.totis.tinys3.response.*;
 import java.io.*;
@@ -53,7 +52,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
 
     Path tempPath = Path.of(tempFilePath);
     String eTag = S3Utils.calculateETag(tempPath, false, List.of());
-    multipartUploads.get(uploadId).add(new PartInfo(partNumber, eTag, tempPath));
+    multipartUploads.get(uploadId).add(new PartInfo(partNumber, eTag, tempPath.toString()));
     return eTag;
   }
 
@@ -64,25 +63,26 @@ public class DefaultS3FileOperations implements S3FileOperations {
     fileOps.createParentDirectories(finalPath);
 
     List<PartInfo> parts = multipartUploads.get(uploadId);
-    List<String> eTags = parts.stream().map(e -> e.eTag).toList();
-    parts.sort(Comparator.comparingInt(a -> a.partNumber));
+    List<String> eTags = parts.stream().map(PartInfo::eTag).toList();
+    parts.sort(Comparator.comparingInt(PartInfo::partNumber));
 
     // For now delete the existing file
     fileOps.delete(finalPath);
 
     for (PartInfo part : parts) {
-      byte[] partData = fileOps.readTempFile(part.tempPath.toString());
+      byte[] partData = fileOps.readTempFile(part.tempPath());
       fileOps.appendToFile(finalPath, partData);
-      fileOps.deleteTempFile(part.tempPath.toString());
+      fileOps.deleteTempFile(part.tempPath());
     }
 
     multipartUploads.remove(uploadId);
+    Path objectPath = Path.of(finalPath);
     return new CompleteMultipartUploadResult(
         bucketName,
         key,
         fileOps.getSize(finalPath),
-        S3Utils.calculateETag(Path.of(finalPath), true, eTags),
-        Path.of(finalPath),
+        S3Utils.calculateETag(objectPath, true, eTags),
+        objectPath,
         eTags);
   }
 
@@ -91,7 +91,7 @@ public class DefaultS3FileOperations implements S3FileOperations {
     List<PartInfo> parts = multipartUploads.remove(uploadId);
     if (parts != null) {
       for (PartInfo part : parts) {
-        fileOps.delete(part.tempPath.toString());
+        fileOps.delete(part.tempPath());
       }
     }
   }
@@ -111,9 +111,9 @@ public class DefaultS3FileOperations implements S3FileOperations {
   }
 
   @Override
-  public BucketListResult getBucketListResult(S3HttpExchange exchange, String bucketName)
+  public BucketListResult getBucketListResult(S3Context context, String bucketName)
       throws StorageException {
-    Map<String, String> queryParams = parseQueryString(exchange.getRequestURI().getQuery());
+    Map<String, String> queryParams = context.getQueriesParams();
     boolean isV2 = "2".equals(queryParams.get("list-type"));
     String prefix = queryParams.getOrDefault("prefix", "");
     String delimiter = queryParams.getOrDefault("delimiter", "");
@@ -123,8 +123,8 @@ public class DefaultS3FileOperations implements S3FileOperations {
     FileEntry[] allEntries = fileOps.list(bucketName);
     List<FileEntry> allObjects =
         Arrays.stream(allEntries)
-            .filter(entry -> !entry.isDirectory())
-            .filter(entry -> entry.path().startsWith(prefix)) // TODO: FIX PREFIX
+            // .filter(entry -> !entry.isDirectory())
+            .filter(entry -> entry.path().startsWith(prefix))
             .sorted(Comparator.comparing(FileEntry::path))
             .toList();
 
@@ -169,9 +169,11 @@ public class DefaultS3FileOperations implements S3FileOperations {
     List<BucketObject> bucketObjects =
         objects.stream()
             .map(
-                entry ->
-                    new BucketObject(
-                        entry.path(), entry.size(), FileTime.fromMillis(entry.lastModified())))
+                entry -> {
+                  String path = entry.isDirectory() ? entry.path() + "/" : entry.path();
+                  return new BucketObject(
+                      path, entry.size(), FileTime.fromMillis(entry.lastModified()));
+                })
             .collect(Collectors.toList());
 
     return new BucketListResult.Builder()
@@ -198,7 +200,11 @@ public class DefaultS3FileOperations implements S3FileOperations {
       throws StorageException {
     String objectPath = getObjectPath(bucketName, key);
     fileOps.createParentDirectories(objectPath);
-    fileOps.writeFile(objectPath, payload);
+    if (payload != null && payload.length > 0) {
+      fileOps.writeFile(objectPath, payload);
+    } else {
+      fileOps.createDirectory(objectPath);
+    }
     return calculateETag(bucketName, key, false, List.of());
   }
 
