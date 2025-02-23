@@ -188,10 +188,36 @@
     let continuationToken = null;
     let isTruncated = false;
 
+    // Add URL handling functions
+    function updateURL() {
+        const urlPath = currentPath.length > 0
+            ? '#/' + currentPath.join('/')
+            : '#/';
+        window.history.pushState(null, '', urlPath);
+    }
+
+    function parseURL() {
+        const hash = window.location.hash.slice(1) || '/';
+        const parts = hash.split('/').filter(Boolean);
+
+        if (parts.length === 0) {
+            currentBucket = null;
+            currentPrefix = '';
+            currentPath = [];
+            return;
+        }
+
+        currentBucket = parts[0];
+        currentPath = parts;
+        currentPrefix = parts.slice(1).join('/');
+        if (currentPrefix) currentPrefix += '/';
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         feather.replace();
     });
 
+    // Update the window load event handler
     window.addEventListener('load', () => {
         const savedCredentials = localStorage.getItem('s3credentials');
         if (savedCredentials) {
@@ -200,6 +226,18 @@
             document.getElementById('accessKey').value = creds.accessKey;
             document.getElementById('secretKey').value = creds.secretKey;
             initializeS3(creds);
+        }
+    });
+
+    // Add popstate event listener for handling browser back/forward
+    window.addEventListener('popstate', () => {
+        if (s3) {
+            parseURL();
+            if (!currentBucket) {
+                listBuckets();
+            } else {
+                listObjects(currentBucket, currentPrefix);
+            }
         }
     });
 
@@ -267,15 +305,30 @@
 
         s3 = new AWS.S3();
 
-        listBuckets()
-            .then(() => {
-                localStorage.setItem('s3credentials', JSON.stringify(credentials));
-                document.getElementById('loginForm').style.display = 'none';
-                document.getElementById('content').style.display = 'flex';
-            })
-            .catch(error => {
-                showError('Connection failed: ' + error.message);
-            });
+        // Parse URL before initial navigation
+        parseURL();
+
+        if (!currentBucket) {
+            listBuckets()
+                .then(() => {
+                    localStorage.setItem('s3credentials', JSON.stringify(credentials));
+                    document.getElementById('loginForm').style.display = 'none';
+                    document.getElementById('content').style.display = 'flex';
+                })
+                .catch(error => {
+                    showError('Connection failed: ' + error.message);
+                });
+        } else {
+            listObjects(currentBucket, currentPrefix)
+                .then(() => {
+                    localStorage.setItem('s3credentials', JSON.stringify(credentials));
+                    document.getElementById('loginForm').style.display = 'none';
+                    document.getElementById('content').style.display = 'flex';
+                })
+                .catch(error => {
+                    showError('Connection failed: ' + error.message);
+                });
+        }
     }
 
     function handleLogout() {
@@ -411,12 +464,12 @@
             currentPath = [];
             updateNavigation();
             updatePagination(data.Buckets.length);
+            updateURL();
             feather.replace();
         } finally {
             showLoading(false);
         }
     }
-
 
     async function listObjects(bucket, prefix = '', token = null) {
         try {
@@ -451,7 +504,6 @@
                 // Skip the current prefix itself
                 if (object.Key === prefix) return;
 
-
                 // Check if it's a folder marker (ends with /)
                 if (object.Key.endsWith('/')) {
                     // Only add if:
@@ -460,7 +512,6 @@
                     // 3. It's not just the current prefix
                     const folderPath = object.Key;
                     const folderName = folderPath.split('/').slice(-2)[0];
-
 
                     if (!commonPrefixes.some(p => p.Prefix === folderPath) &&
                         folderName && // Check for empty folder name
@@ -503,6 +554,7 @@
             // Update pagination with correct count
             updatePagination(allItems.length);
             updateNavigation();
+            updateURL();
             feather.replace();
         } catch (error) {
             console.error('Error listing objects:', error);
@@ -575,11 +627,14 @@
             listBuckets();
             currentBucket = null;
             currentPrefix = '';
+            currentPath = [];
+            updateURL();
         } else {
             currentPath.pop();
             currentPrefix = currentPath.slice(1).join('/');
             if (currentPrefix) currentPrefix += '/';
             listObjects(currentBucket, currentPrefix);
+            updateURL();
         }
     }
 
@@ -588,12 +643,14 @@
         currentPrefix = '';
         currentPath = [bucket];
         listObjects(bucket, '');
+        updateURL();
     }
 
     function navigateToFolder(prefix) {
         currentPrefix = prefix;
         currentPath = [currentBucket, ...prefix.split('/').filter(Boolean)];
         listObjects(currentBucket, prefix);
+        updateURL();
     }
 
     async function handleFileUpload(event) {
@@ -732,7 +789,6 @@
             showLoading(false);
         }
     }
-
 </script>
 </body>
 </html>
