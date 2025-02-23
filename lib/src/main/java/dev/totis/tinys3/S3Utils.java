@@ -169,19 +169,6 @@ public class S3Utils {
     return params;
   }
 
-  public static Map<String, String> parseQueryString(String query) {
-    Map<String, String> params = new HashMap<>();
-    if (query != null) {
-      for (String param : query.split("&")) {
-        String[] parts = param.split("=", 2);
-        if (parts.length == 2) {
-          params.put(parts[0], parts[1]);
-        }
-      }
-    }
-    return params;
-  }
-
   public static boolean verifyExpirationDate(String date, String expires) {
     try {
       // AWS uses ISO 8601 format: yyyyMMdd'T'HHmmss'Z'

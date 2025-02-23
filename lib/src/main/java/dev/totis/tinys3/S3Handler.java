@@ -1,6 +1,5 @@
 package dev.totis.tinys3;
 
-import static dev.totis.tinys3.CanonicalRequest.createCanonicalRequest;
 import static dev.totis.tinys3.S3Utils.*;
 
 import dev.totis.tinys3.auth.Credentials;
@@ -12,9 +11,6 @@ import dev.totis.tinys3.io.StorageException;
 import dev.totis.tinys3.logging.S3Logger;
 import dev.totis.tinys3.response.CopyObjectResult;
 import java.io.IOException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -52,16 +48,14 @@ public class S3Handler {
         return;
       }
 
-
-
       if (s3Context.isPostBucketUpload()) {
         BucketUploadPostHandler policy = new BucketUploadPostHandler(authenticator, fileOperations);
-        policy.handle(exchange, s3Context.getPayload());
+        policy.handle(s3Context);
         return;
       }
 
       if (!authenticator.authenticateRequest(exchange, s3Context.getPayload())) {
-        sendError(exchange, 403, "XAmzContentSHA256Mismatch");
+        s3Context.sendError(403, "XAmzContentSHA256Mismatch");
         return;
       }
 
@@ -81,82 +75,78 @@ public class S3Handler {
 
       String[] pathParts = path.split("/", 3);
       String bucketName = pathParts.length > 1 ? pathParts[1] : "";
-      String key = pathParts.length > 2 ? pathParts[2] : "";
+      String objectKey = pathParts.length > 2 ? pathParts[2] : "";
+
+      s3Context.setBucketName(bucketName);
+      s3Context.setObjectKey(objectKey);
 
       if (query.contains("uploads")) {
-        handleMultipartUpload(exchange, bucketName, key, method);
+        handleMultipartUpload(s3Context);
         return;
       } else if (query.contains("uploadId")) {
-        handleMultipartOperation(exchange, bucketName, key, method, query, s3Context.getPayload());
+        handleMultipartOperation(s3Context);
         return;
-      } else if (key.isEmpty()) {
+      } else if (objectKey.isEmpty()) {
         handleBucketOperation(exchange, bucketName, method);
         return;
       }
 
-      handleObjectOperation(exchange, bucketName, key, method, s3Context.getPayload());
+      handleObjectOperation(exchange, bucketName, objectKey, method, s3Context.getPayload());
 
     } catch (Exception e) {
       S3Logger.getInstance().log("Could not process request" + e);
-      sendError(exchange, 500, "InternalError");
+      s3Context.sendError(500, "InternalError");
     }
   }
 
-  private void handleMultipartUpload(
-      S3HttpExchange exchange, String bucketName, String key, String method) throws IOException {
-    var response = fileOperations.getInitiateMultipartUploadResult(bucketName, key);
-    sendResponse(exchange, 200, response.toXML(), "application/xml");
+  private void handleMultipartUpload(S3Context s3Context) throws IOException {
+    var response =
+        fileOperations.getInitiateMultipartUploadResult(
+            s3Context.getBucketName(), s3Context.getObjectKey());
+    s3Context.sendResponse(200, response.toXML(), "application/xml");
   }
 
-  private void handleMultipartOperation(
-      S3HttpExchange exchange,
-      String bucketName,
-      String key,
-      String method,
-      String query,
-      byte[] payload)
-      throws IOException, StorageException {
-    Map<String, String> queryParams = parseQueryString(query);
+  private void handleMultipartOperation(S3Context s3Context) throws IOException, StorageException {
+    Map<String, String> queryParams = s3Context.getQueriesParams();
     String uploadId = queryParams.get("uploadId");
 
     if (!fileOperations.containsKey(uploadId)) {
-      sendError(exchange, 404, "NoSuchUpload");
+      s3Context.sendError(404, "NoSuchUpload");
       return;
     }
 
-    switch (method) {
-      case "PUT" -> handleUploadPart(exchange, uploadId, queryParams, payload);
-      case "POST" -> handleCompleteMultipartUpload(exchange, bucketName, key, uploadId);
-      case "DELETE" -> handleAbortMultipartUpload(exchange, uploadId);
+    switch (s3Context.getMethod()) {
+      case "PUT" -> handleUploadPart(s3Context, uploadId);
+      case "POST" -> handleCompleteMultipartUpload(s3Context, uploadId);
+      case "DELETE" -> handleAbortMultipartUpload(s3Context, uploadId);
     }
   }
 
-  private void handleUploadPart(
-      S3HttpExchange exchange, String uploadId, Map<String, String> queryParams, byte[] payload)
+  private void handleUploadPart(S3Context s3Context, String uploadId)
       throws IOException, StorageException {
-    String eTag = fileOperations.handleUploadPart(uploadId, queryParams, payload);
-
-    exchange.getResponseHeaders().addHeader("ETag", "\"" + eTag + "\"");
-    exchange.sendResponseHeaders(200, -1);
-    exchange.getResponseBody().close();
+    String eTag =
+        fileOperations.handleUploadPart(
+            uploadId, s3Context.getQueriesParams(), s3Context.getPayload());
+    s3Context.getHttpExchange().getResponseHeaders().addHeader("ETag", "\"" + eTag + "\"");
+    s3Context.sendResponse(200, "", "");
   }
 
-  private void handleCompleteMultipartUpload(
-      S3HttpExchange exchange, String bucketName, String key, String uploadId) throws IOException {
-
+  private void handleCompleteMultipartUpload(S3Context s3Context, String uploadId)
+      throws IOException {
     try {
-      var result = fileOperations.getCompleteMultipartUploadResult(bucketName, key, uploadId);
-      sendResponse(exchange, 200, result.toXML(), "application/xml");
+      var result =
+          fileOperations.getCompleteMultipartUploadResult(
+              s3Context.getBucketName(), s3Context.getObjectKey(), uploadId);
+      s3Context.sendResponse(200, result.toXML(), "application/xml");
     } catch (Exception e) {
-      sendError(exchange, 500, "InternalError");
+      s3Context.sendError(500, "InternalError");
     }
   }
 
-  private void handleAbortMultipartUpload(S3HttpExchange exchange, String uploadId)
+  private void handleAbortMultipartUpload(S3Context s3Context, String uploadId)
       throws IOException, StorageException {
     fileOperations.handleAbortMultipartUpload(uploadId);
-    exchange.sendResponseHeaders(204, -1);
-    exchange.getResponseBody().close();
+    s3Context.sendResponse(204, "", "application/xml");
   }
 
   private void handleListBuckets(S3HttpExchange exchange, Credentials credentials)
@@ -361,43 +351,12 @@ public class S3Handler {
       String accessKey = params.get("accessKey");
       long expiration = Long.parseLong(params.get("expiration"));
 
-      String presignedUrl =
-          generatePreSignedUrl(method, path, accessKey, expiration, exchange.getRequestHeaders());
-      sendResponse(exchange, 200, presignedUrl, "text/plain");
+      String preSignedUrl =
+          authenticator.generatePreSignedUrl(
+              method, path, accessKey, expiration, exchange.getRequestHeaders());
+      sendResponse(exchange, 200, preSignedUrl, "text/plain");
     } catch (Exception e) {
       sendError(exchange, 400, "InvalidRequest");
     }
-  }
-
-  private String generatePreSignedUrl(
-      String method, String path, String accessKey, long expiration, S3HttpHeaders requestHeaders)
-      throws NoSuchAlgorithmException, InvalidKeyException {
-    String timestamp =
-        DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
-            .withZone(ZoneOffset.UTC)
-            .format(Instant.now());
-
-    Map<String, String> queryParams = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-    queryParams.put("X-Amz-Algorithm", "AWS4-HMAC-SHA256");
-    queryParams.put(
-        "X-Amz-Credential",
-        accessKey + "/" + S3Utils.getCredentialScope(timestamp, credentials.get(accessKey)));
-    queryParams.put("X-Amz-Date", timestamp);
-    queryParams.put("X-Amz-Expires", String.valueOf(expiration));
-    queryParams.put("X-Amz-SignedHeaders", "host");
-
-    String canonicalRequest = createCanonicalRequest(method, path, queryParams, requestHeaders);
-    String stringToSign =
-        S3Utils.createStringToSign(canonicalRequest, timestamp, credentials.get(accessKey));
-    String signature =
-        S3Utils.calculateSignature(stringToSign, timestamp, credentials.get(accessKey));
-
-    StringBuilder url = new StringBuilder(path).append("?");
-    for (Map.Entry<String, String> param : queryParams.entrySet()) {
-      url.append(param.getKey()).append("=").append(param.getValue()).append("&");
-    }
-    url.append("X-Amz-Signature=").append(signature);
-
-    return url.toString();
   }
 }

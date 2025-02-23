@@ -1,14 +1,16 @@
 package dev.totis.tinys3.auth;
 
-import static dev.totis.tinys3.S3Utils.parseQueryString;
-
 import dev.totis.tinys3.S3ServerVerifier;
 import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.http.S3HttpHeaders;
 import java.net.URI;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static dev.totis.tinys3.S3Context.parseQueryString;
 
 public class DefaultAuthenticator implements S3Authenticator {
   private static final String AWS_ALGORITHM = "AWS4-HMAC-SHA256";
@@ -49,6 +51,15 @@ public class DefaultAuthenticator implements S3Authenticator {
       e.printStackTrace();
       return null;
     }
+  }
+
+  @Override
+  public String generatePreSignedUrl(
+      String method, String path, String accessKey, long expiration, S3HttpHeaders requestHeaders)
+      throws NoSuchAlgorithmException, InvalidKeyException {
+    Credentials credential = credentials.get(accessKey);
+    var verifier = new S3ServerVerifier(credential);
+    return verifier.generatePreSignedUrl(method, path, credential, expiration, requestHeaders);
   }
 
   private Optional<String> extractAccessKey(S3HttpExchange exchange) {

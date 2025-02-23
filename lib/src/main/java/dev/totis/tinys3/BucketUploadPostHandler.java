@@ -3,7 +3,6 @@ package dev.totis.tinys3;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.totis.tinys3.auth.S3Authenticator;
-import dev.totis.tinys3.http.S3HttpExchange;
 import dev.totis.tinys3.response.PostUploadResult;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -20,20 +19,20 @@ public class BucketUploadPostHandler {
     this.fileOperations = fileOperations;
   }
 
-  public void handle(S3HttpExchange exchange, byte[] payload) throws IOException {
-    String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+  public void handle(S3Context s3Context) throws IOException {
+    String contentType = s3Context.getContentType();
     if (contentType == null || !contentType.startsWith("multipart/form-data")) {
-      sendResponse(exchange, 400, "Invalid content type", "application/xml");
+      s3Context.sendResponse(400, "Invalid content type", "application/xml");
       return;
     }
 
-    if (authenticator.authenticateRequest(exchange, payload)) {
-      sendResponse(exchange, 403, "Invalid content type", "application/xml");
+    if (authenticator.authenticateRequest(s3Context.getHttpExchange(), s3Context.getPayload())) {
+      s3Context.sendResponse(403, "Invalid content type", "application/xml");
       return;
     }
 
     String boundary = contentType.substring(contentType.indexOf("boundary=") + 9);
-    MultipartFormData formData = MultipartFormData.parse(payload, boundary);
+    MultipartFormData formData = MultipartFormData.parse(s3Context.getPayload(), boundary);
 
     try {
       String date = formData.getField("x-amz-date");
@@ -46,20 +45,19 @@ public class BucketUploadPostHandler {
       String bucketName = getBucketNameFromPolicy(policyJson);
 
       if (!verifyPostPolicy(policyJson, signature, credential)) {
-        sendResponse(exchange, 403, "Invalid policy or signature", "application/xml");
+        s3Context.sendResponse(403, "Invalid policy or signature", "application/xml");
         return;
       }
 
       String etag =
           fileOperations.handlePutObject(
               bucketName, formData.getFileName(), formData.getFileData());
-      sendResponse(
-          exchange,
+      s3Context.sendResponse(
           200,
           new PostUploadResult(bucketName, formData.getFileName(), etag).toXML(),
           "application/xml");
     } catch (Exception e) {
-      sendResponse(exchange, 500, "Failed to process upload: " + e.getMessage(), "application/xml");
+      s3Context.sendResponse(500, "Failed to process upload: " + e.getMessage(), "application/xml");
     }
   }
 
@@ -151,11 +149,6 @@ public class BucketUploadPostHandler {
 
       return new MultipartFormData(formFields, fileData, fileName);
     }
-  }
-
-  public static void sendResponse(
-      S3HttpExchange exchange, int code, String response, String contentType) throws IOException {
-    S3Utils.sendResponse(exchange, code, response, contentType);
   }
 
   private static boolean verifyPostPolicy(String policy, String signature, String accessKey) {

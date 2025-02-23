@@ -5,9 +5,15 @@ import static dev.totis.tinys3.CanonicalRequest.createPresignedCanonicalRequest;
 import static dev.totis.tinys3.S3Utils.*;
 
 import dev.totis.tinys3.auth.Credentials;
+import dev.totis.tinys3.http.S3HttpHeaders;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -142,6 +148,40 @@ public class S3ServerVerifier {
                 (v1, v2) -> v2,
                 TreeMap::new // Ensures sorting
                 ));
+  }
+
+  public String generatePreSignedUrl(
+      String method,
+      String path,
+      Credentials credentials,
+      long expiration,
+      S3HttpHeaders requestHeaders)
+      throws NoSuchAlgorithmException, InvalidKeyException {
+    String timestamp =
+        DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+            .withZone(ZoneOffset.UTC)
+            .format(Instant.now());
+
+    Map<String, String> queryParams = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    queryParams.put("X-Amz-Algorithm", "AWS4-HMAC-SHA256");
+    queryParams.put(
+        "X-Amz-Credential",
+        credentials.accessKey() + "/" + S3Utils.getCredentialScope(timestamp, credentials));
+    queryParams.put("X-Amz-Date", timestamp);
+    queryParams.put("X-Amz-Expires", String.valueOf(expiration));
+    queryParams.put("X-Amz-SignedHeaders", "host");
+
+    String canonicalRequest = createCanonicalRequest(method, path, queryParams, requestHeaders);
+    String stringToSign = S3Utils.createStringToSign(canonicalRequest, timestamp, credentials);
+    String signature = S3Utils.calculateSignature(stringToSign, timestamp, credentials);
+
+    StringBuilder url = new StringBuilder(path).append("?");
+    for (Map.Entry<String, String> param : queryParams.entrySet()) {
+      url.append(param.getKey()).append("=").append(param.getValue()).append("&");
+    }
+    url.append("X-Amz-Signature=").append(signature);
+
+    return url.toString();
   }
 
   private Map<String, String> parseAuthHeader(String authHeader) {
