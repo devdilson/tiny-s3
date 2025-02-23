@@ -26,7 +26,7 @@ public class BucketUploadPostHandler {
       return;
     }
 
-    if (authenticator.authenticateRequest(s3Context)) {
+    if (!authenticator.authenticateRequest(s3Context)) {
       s3Context.sendResponse(403, "Invalid content type", "application/xml");
       return;
     }
