@@ -59,7 +59,7 @@ public class MinioIntegrationTest {
         new S3Server.Builder()
             .withPort(DEFAULT_PORT)
             .withStorageDir("storage")
-            .withInMemory()
+         //   .withInMemory()
             .withCredentials(credential)
             .build();
 

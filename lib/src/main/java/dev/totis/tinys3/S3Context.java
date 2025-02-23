@@ -85,6 +85,7 @@ public class S3Context {
     String userAgent = httpExchange.getRequestHeaders().getFirst("User-Agent");
     return userAgent != null
         && userAgent.contains("Mozilla")
+        && method.equals("GET")
         && !httpExchange.getRequestHeaders().containsHeader("X-amz-date")
         && !isPreSignedUrl(httpExchange.getRequestURI().toString());
   }
