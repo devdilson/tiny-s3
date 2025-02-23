@@ -193,10 +193,36 @@ public class BadFrontend {
     let continuationToken = null;
     let isTruncated = false;
 
+    // Add URL handling functions
+    function updateURL() {
+        const urlPath = currentPath.length > 0
+            ? '#/' + currentPath.join('/')
+            : '#/';
+        window.history.pushState(null, '', urlPath);
+    }
+
+    function parseURL() {
+        const hash = window.location.hash.slice(1) || '/';
+        const parts = hash.split('/').filter(Boolean);
+
+        if (parts.length === 0) {
+            currentBucket = null;
+            currentPrefix = '';
+            currentPath = [];
+            return;
+        }
+
+        currentBucket = parts[0];
+        currentPath = parts;
+        currentPrefix = parts.slice(1).join('/');
+        if (currentPrefix) currentPrefix += '/';
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         feather.replace();
     });
 
+    // Update the window load event handler
     window.addEventListener('load', () => {
         const savedCredentials = localStorage.getItem('s3credentials');
         if (savedCredentials) {
@@ -205,6 +231,18 @@ public class BadFrontend {
             document.getElementById('accessKey').value = creds.accessKey;
             document.getElementById('secretKey').value = creds.secretKey;
             initializeS3(creds);
+        }
+    });
+
+    // Add popstate event listener for handling browser back/forward
+    window.addEventListener('popstate', () => {
+        if (s3) {
+            parseURL();
+            if (!currentBucket) {
+                listBuckets();
+            } else {
+                listObjects(currentBucket, currentPrefix);
+            }
         }
     });
 
@@ -272,15 +310,30 @@ public class BadFrontend {
 
         s3 = new AWS.S3();
 
-        listBuckets()
-            .then(() => {
-                localStorage.setItem('s3credentials', JSON.stringify(credentials));
-                document.getElementById('loginForm').style.display = 'none';
-                document.getElementById('content').style.display = 'flex';
-            })
-            .catch(error => {
-                showError('Connection failed: ' + error.message);
-            });
+        // Parse URL before initial navigation
+        parseURL();
+
+        if (!currentBucket) {
+            listBuckets()
+                .then(() => {
+                    localStorage.setItem('s3credentials', JSON.stringify(credentials));
+                    document.getElementById('loginForm').style.display = 'none';
+                    document.getElementById('content').style.display = 'flex';
+                })
+                .catch(error => {
+                    showError('Connection failed: ' + error.message);
+                });
+        } else {
+            listObjects(currentBucket, currentPrefix)
+                .then(() => {
+                    localStorage.setItem('s3credentials', JSON.stringify(credentials));
+                    document.getElementById('loginForm').style.display = 'none';
+                    document.getElementById('content').style.display = 'flex';
+                })
+                .catch(error => {
+                    showError('Connection failed: ' + error.message);
+                });
+        }
     }
 
     function handleLogout() {
@@ -416,6 +469,7 @@ public class BadFrontend {
             currentPath = [];
             updateNavigation();
             updatePagination(data.Buckets.length);
+            updateURL();
             feather.replace();
         } finally {
             showLoading(false);
@@ -450,17 +504,49 @@ public class BadFrontend {
             // Add folders (CommonPrefixes)
             allItems.push(...commonPrefixes.map(prefix => ({...prefix, isFolder: true})));
 
-            // Add files (Contents), filtering out the current prefix and folder markers
-            allItems.push(...contents
-                .filter(object => object.Key !== prefix && !object.Key.endsWith('/'))
-                .map(object => ({...object, isFolder: false})));
+            // Add files (Contents), now including empty folders (objects ending with /)
+            contents.forEach(object => {
+                // Skip the current prefix itself
+                if (object.Key === prefix) return;
 
-            // Sort all items by last modified date in descending order
+                // Check if it's a folder marker (ends with /)
+                if (object.Key.endsWith('/')) {
+                    // Only add if:
+                    // 1. It's not already in commonPrefixes
+                    // 2. It's not an empty folder name
+                    // 3. It's not just the current prefix
+                    const folderPath = object.Key;
+                    const folderName = folderPath.split('/').slice(-2)[0];
+
+                    if (!commonPrefixes.some(p => p.Prefix === folderPath) &&
+                        folderName && // Check for empty folder name
+                        folderPath !== prefix) {
+                        allItems.push({
+                            Prefix: folderPath,
+                            LastModified: object.LastModified,
+                            isFolder: true
+                        });
+                    }
+                } else {
+                    // Regular file
+                    allItems.push({...object, isFolder: false});
+                }
+            });
+
+            // Sort all items:
+            // 1. Folders first
+            // 2. Then by last modified date in descending order
             allItems.sort((a, b) => {
+                if (a.isFolder && !b.isFolder) return -1;
+                if (!a.isFolder && b.isFolder) return 1;
+
                 const dateA = a.LastModified || new Date(0);
                 const dateB = b.LastModified || new Date(0);
                 return new Date(dateB) - new Date(dateA);
             });
+
+            // Filter empty prefix
+            allItems = allItems.filter(item => item.Prefix !== "/");
 
             // Render sorted items
             allItems.forEach(item => {
@@ -470,13 +556,13 @@ public class BadFrontend {
             continuationToken = data.NextContinuationToken;
             isTruncated = data.IsTruncated;
 
-            // Update pagination with correct count (0 for empty bucket)
+            // Update pagination with correct count
             updatePagination(allItems.length);
             updateNavigation();
+            updateURL();
             feather.replace();
         } catch (error) {
             console.error('Error listing objects:', error);
-            // Show a user-friendly error message
             alert('Failed to list bucket contents: ' + error.message);
         } finally {
             showLoading(false);
@@ -546,11 +632,14 @@ public class BadFrontend {
             listBuckets();
             currentBucket = null;
             currentPrefix = '';
+            currentPath = [];
+            updateURL();
         } else {
             currentPath.pop();
             currentPrefix = currentPath.slice(1).join('/');
             if (currentPrefix) currentPrefix += '/';
             listObjects(currentBucket, currentPrefix);
+            updateURL();
         }
     }
 
@@ -559,12 +648,14 @@ public class BadFrontend {
         currentPrefix = '';
         currentPath = [bucket];
         listObjects(bucket, '');
+        updateURL();
     }
 
     function navigateToFolder(prefix) {
         currentPrefix = prefix;
         currentPath = [currentBucket, ...prefix.split('/').filter(Boolean)];
         listObjects(currentBucket, prefix);
+        updateURL();
     }
 
     async function handleFileUpload(event) {
@@ -629,26 +720,39 @@ public class BadFrontend {
 
         try {
             showLoading();
+            // First, list all objects with this prefix
             const objects = await listAllObjects(currentBucket, prefix);
 
-            if (objects.length > 0) {
-                const deleteParams = {
-                    Bucket: currentBucket,
-                    Delete: {
-                        Objects: objects.map(obj => ({ Key: obj.Key })),
-                        Quiet: true
-                    }
-                };
+            // Create params to delete folder and its contents
+            const deleteParams = {
+                Bucket: currentBucket,
+                Delete: {
+                    Objects: [
+                        // Always include the folder marker itself
+                        { Key: prefix }
+                    ],
+                    Quiet: true
+                }
+            };
 
-                await s3.deleteObjects(deleteParams).promise();
+            // If there are contents, add them to the deletion list
+            if (objects.length > 0) {
+                deleteParams.Delete.Objects.push(
+                    ...objects.map(obj => ({ Key: obj.Key }))
+                );
             }
 
+            // Perform the deletion
+            await s3.deleteObjects(deleteParams).promise();
+
+            // Navigate back if we're inside the deleted folder
             if (currentPrefix.startsWith(prefix)) {
                 navigateBack();
             } else {
                 listObjects(currentBucket, currentPrefix);
             }
         } catch (error) {
+            console.error('Delete folder error:', error);
             alert('Delete failed: ' + error.message);
         } finally {
             showLoading(false);
@@ -690,9 +794,9 @@ public class BadFrontend {
             showLoading(false);
         }
     }
-
 </script>
 </body>
 </html>
-                  """;
+
+         """;
 }
